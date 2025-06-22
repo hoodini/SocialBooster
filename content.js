@@ -252,21 +252,45 @@ class SocialBotContentScript {
 
     async handlePostVisible(postElement) {
         const postId = this.getPostId(postElement);
-        if (!postId || this.processedPosts.has(postId) || !this.isPlatformEnabled()) return;
+        if (!postId || this.processedPosts.has(postId) || !this.isPlatformEnabled()) {
+            console.log('Post skipped:', {
+                hasPostId: !!postId,
+                alreadyProcessed: this.processedPosts.has(postId),
+                platformEnabled: this.isPlatformEnabled(),
+                currentPlatform: this.currentPlatform,
+                settings: this.settings
+            });
+            return;
+        }
 
         if (!this.viewTimers.has(postId)) {
             const timer = { startTime: Date.now(), likeProcessed: false, commentProcessed: false, element: postElement };
             this.viewTimers.set(postId, timer);
+
+            console.log('📄 New post detected:', {
+                postId: postId.substring(0, 20) + '...',
+                platform: this.currentPlatform,
+                autoLikes: this.settings.autoLikes,
+                autoComments: this.settings.autoComments,
+                author: this.extractPostAuthor(postElement)
+            });
 
             // רישום הפוסט שנצפה
             this.sessionData.postsViewed++;
             await this.recordViewedPost(postElement);
 
             if (this.settings.autoLikes) {
+                console.log('👍 Scheduling auto-like in 1.5 seconds...');
                 setTimeout(() => this.processAutoLike(postId, postElement), 1500);
+            } else {
+                console.log('👍 Auto-likes disabled');
             }
+            
             if (this.settings.autoComments) {
+                console.log('💬 Scheduling auto-comment in 3 seconds...');
                 setTimeout(() => this.processAutoComment(postId, postElement), 3000);
+            } else {
+                console.log('💬 Auto-comments disabled');
             }
         }
     }
@@ -346,6 +370,22 @@ class SocialBotContentScript {
             // הוספת עיכוב אקראי למניעת זיהוי בוט
             await this.sleep(500 + Math.random() * 1000);
             
+            // בדיקה אם להשתמש בלב אהבה
+            if (this.settings.preferHeartReaction && this.currentPlatform === 'linkedin') {
+                const heartSuccess = await this.tryHeartReaction(likeButton, postElement);
+                if (heartSuccess) {
+                    this.sessionData.likesGiven++;
+                    await this.recordLike(postElement, 'heart');
+                    
+                    const author = this.extractPostAuthor(postElement);
+                    this.addRealtimeActivity(`❤️ נתתי לב אהבה לפוסט של ${author}`);
+                    
+                    chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data: { likes: 1 } });
+                    console.log('❤️ Successfully auto-hearted post:', postId);
+                    return;
+                }
+            }
+            
             await this.simulateHumanClick(likeButton);
             
             // חכה ובדוק שהלייק אכן נוסף
@@ -368,7 +408,61 @@ class SocialBotContentScript {
         }
     }
 
-    async recordLike(postElement) {
+    async tryHeartReaction(likeButton, postElement) {
+        try {
+            console.log('🔄 Attempting heart reaction...');
+            
+            // לחץ לחיצה ארוכה על כפתור הלייק כדי להציג תגובות
+            const longPressEvent = new MouseEvent('mousedown', { 
+                bubbles: true, 
+                cancelable: true, 
+                view: window,
+                button: 0
+            });
+            likeButton.dispatchEvent(longPressEvent);
+            
+            // המתן לטעינת תפריט התגובות
+            await this.sleep(800);
+            
+            // חפש את כפתור הלב
+            const heartButton = document.querySelector('button[aria-label*="Love"], button[data-reaction-type="LOVE"], .reactions-menu button[aria-label*="❤"], .reactions-menu .reaction-love');
+            
+            if (heartButton) {
+                console.log('❤️ Found heart reaction button');
+                await this.simulateHumanClick(heartButton);
+                
+                // המתן לוודא שהתגובה נרשמה
+                await this.sleep(500);
+                
+                // בדיקה אם הלב נבחר
+                const isHeartSelected = likeButton.querySelector('svg[aria-label*="Love"]') || 
+                                      likeButton.classList.contains('love-reaction') ||
+                                      likeButton.getAttribute('aria-pressed') === 'true';
+                
+                if (isHeartSelected) {
+                    console.log('❤️ Heart reaction successfully applied!');
+                    return true;
+                }
+            } else {
+                console.log('❤️ Heart reaction button not found, falling back to regular like');
+            }
+            
+            // אם לא מצאנו לב או שזה לא עבד, בטל את הלחיצה הארוכה
+            const mouseUpEvent = new MouseEvent('mouseup', { 
+                bubbles: true, 
+                cancelable: true, 
+                view: window 
+            });
+            likeButton.dispatchEvent(mouseUpEvent);
+            
+            return false;
+        } catch (error) {
+            console.error('Error trying heart reaction:', error);
+            return false;
+        }
+    }
+
+    async recordLike(postElement, reactionType = 'like') {
         if (!this.analyticsDB) {
             console.error('Analytics DB not initialized');
             return;
@@ -383,13 +477,15 @@ class SocialBotContentScript {
                 url: window.location.href,
                 authorProfile: this.extractAuthorProfile(postElement),
                 likesCount: this.extractLikesCount(postElement),
-                commentsCount: this.extractCommentsCount(postElement)
+                commentsCount: this.extractCommentsCount(postElement),
+                reactionType: reactionType
             };
 
             console.log('Recording like for post:', {
                 postId: postData.postId,
                 author: postData.author,
                 platform: postData.platform,
+                reactionType: reactionType,
                 likesCount: postData.likesCount
             });
 
@@ -397,7 +493,8 @@ class SocialBotContentScript {
             console.log('Like recorded successfully:', result);
             
             // עדכון הפיד הזמן-אמת
-            this.addRealtimeActivity(`נתן לייק לפוסט של ${postData.author}`);
+            const emoji = reactionType === 'heart' ? '❤️' : '👍';
+            this.addRealtimeActivity(`${emoji} נתן ${reactionType === 'heart' ? 'לב אהבה' : 'לייק'} לפוסט של ${postData.author}`);
             
         } catch (error) {
             console.error('Failed to record like:', error);

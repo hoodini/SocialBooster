@@ -465,6 +465,53 @@ textarea {
     font-size: 16px;
 }
 
+.save-settings {
+    margin-top: 15px;
+    text-align: center;
+}
+
+.btn-save {
+    background: linear-gradient(135deg, #00d2d3 0%, #54a0ff 100%);
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+    box-shadow: 0 4px 15px rgba(0, 210, 211, 0.2);
+}
+
+.btn-save:hover {
+    background: linear-gradient(135deg, #54a0ff 0%, #00d2d3 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 210, 211, 0.3);
+}
+
+.btn-save:active {
+    transform: translateY(0);
+}
+
+.settings-status {
+    margin-top: 10px;
+    padding: 8px 16px;
+    background: #2ed573;
+    color: white;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    animation: fadeInOut 3s ease;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(-10px); }
+    20% { opacity: 1; transform: translateY(0); }
+    80% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(-10px); }
+}
+
 /* Responsive adjustments */
 @media (max-height: 600px) {
     .section {

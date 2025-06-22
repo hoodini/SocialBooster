@@ -46,6 +46,7 @@ class SocialBotPopup {
             // Load automation settings
             document.getElementById('autoLikes').checked = result.autoLikes || false;
             document.getElementById('autoComments').checked = result.autoComments || false;
+            document.getElementById('preferHeartReaction').checked = result.preferHeartReaction || false;
             document.getElementById('linkedinEnabled').checked = result.linkedinEnabled !== false;
             document.getElementById('facebookEnabled').checked = result.facebookEnabled || false;
 
@@ -79,11 +80,17 @@ class SocialBotPopup {
         // Automation Settings
         document.getElementById('autoLikes').addEventListener('change', () => this.saveAutomationSettings());
         document.getElementById('autoComments').addEventListener('change', () => this.saveAutomationSettings());
+        document.getElementById('preferHeartReaction').addEventListener('change', () => this.saveAutomationSettings());
         document.getElementById('linkedinEnabled').addEventListener('change', () => this.saveAutomationSettings());
         document.getElementById('facebookEnabled').addEventListener('change', () => this.saveAutomationSettings());
 
         // Dashboard
         document.getElementById('dashboardBtn').addEventListener('click', () => this.openDashboard());
+
+        // Save automation settings button
+        document.getElementById('saveAutomationBtn').addEventListener('click', () => {
+            this.saveAutomationSettingsManually();
+        });
     }
 
     async saveApiKey() {
@@ -338,6 +345,7 @@ class SocialBotPopup {
         const settings = {
             autoLikes: document.getElementById('autoLikes').checked,
             autoComments: document.getElementById('autoComments').checked,
+            preferHeartReaction: document.getElementById('preferHeartReaction').checked,
             linkedinEnabled: document.getElementById('linkedinEnabled').checked,
             facebookEnabled: document.getElementById('facebookEnabled').checked
         };
@@ -356,8 +364,44 @@ class SocialBotPopup {
         } catch (error) {
             console.log('Could not notify content script:', error);
         }
+    }
 
-        this.showStatus('הגדרות נשמרו בהצלחה!', 'success');
+    async saveAutomationSettingsManually() {
+        const settings = {
+            autoLikes: document.getElementById('autoLikes').checked,
+            autoComments: document.getElementById('autoComments').checked,
+            preferHeartReaction: document.getElementById('preferHeartReaction').checked,
+            linkedinEnabled: document.getElementById('linkedinEnabled').checked,
+            facebookEnabled: document.getElementById('facebookEnabled').checked
+        };
+
+        await chrome.storage.sync.set(settings);
+        
+        // Show visual confirmation
+        const statusElement = document.getElementById('settingsStatus');
+        statusElement.style.display = 'block';
+        
+        // Hide after animation
+        setTimeout(() => {
+            statusElement.style.display = 'none';
+        }, 3000);
+        
+        // Notify content script about settings change
+        try {
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab) {
+                chrome.tabs.sendMessage(tab.id, {
+                    type: 'SETTINGS_CHANGED',
+                    settings: settings
+                });
+                console.log('Settings sent to content script:', settings);
+            }
+        } catch (error) {
+            console.log('Could not notify content script:', error);
+        }
+
+        // Also show general status
+        this.showStatus('🚀 הגדרות האוטומציה עודכנו והתחילו לפעול!', 'success');
     }
 
     showStatus(message, type) {
