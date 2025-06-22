@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YUV.AI SocialBot Pro - דשבורד אנליטיקה</title>
+    <link rel="stylesheet" href="dashboard.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="db.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <header class="dashboard-header">
+            <div class="logo-section">
+                <img src="icons/icon48.png" alt="YUV.AI" class="logo">
+                <div class="brand-info">
+                    <h1>YUV.AI SocialBot Pro</h1>
+                    <p class="motto">FLY HIGH WITH YUV.AI</p>
+                    <p class="creator">Created by Yuval Avidani</p>
+                </div>
+            </div>
+            <div class="header-controls">
+                <div class="manual-controls">
+                    <button id="manualLikeBtn" class="manual-btn like-btn" title="לייק ידני לפוסט הבא">
+                        👍 לייק ידני
+                    </button>
+                    <button id="manualCommentBtn" class="manual-btn comment-btn" title="תגובה ידנית לפוסט הבא">
+                        💬 תגובה ידנית
+                    </button>
+                </div>
+                <select id="timeRangeSelect" class="time-selector">
+                    <option value="7">שבוע אחרון</option>
+                    <option value="30" selected>30 ימים אחרונים</option>
+                    <option value="90">3 חודשים אחרונים</option>
+                    <option value="365">שנה אחרונה</option>
+                </select>
+                <button id="refreshBtn" class="refresh-btn">רענן נתונים</button>
+                <button id="exportBtn" class="export-btn">יצא נתונים</button>
+            </div>
+        </header>
+
+        <!-- Loading Screen -->
+        <div id="loadingScreen" class="loading-screen">
+            <div class="loading-spinner"></div>
+            <p>טוען נתוני אנליטיקה...</p>
+        </div>
+
+        <!-- Main Dashboard -->
+        <div id="dashboardContent" class="dashboard-content" style="display: none;">
+            
+            <!-- Summary Cards -->
+            <section class="summary-section">
+                <div class="summary-grid">
+                    <div class="summary-card likes-card">
+                        <div class="card-icon">👍</div>
+                        <div class="card-content">
+                            <h3>סך הלייקים</h3>
+                            <div class="stat-number" id="totalLikes">0</div>
+                            <div class="stat-change" id="likesChange">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="summary-card comments-card">
+                        <div class="card-icon">💬</div>
+                        <div class="card-content">
+                            <h3>סך התגובות</h3>
+                            <div class="stat-number" id="totalComments">0</div>
+                            <div class="stat-change" id="commentsChange">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="summary-card posts-card">
+                        <div class="card-icon">📄</div>
+                        <div class="card-content">
+                            <h3>פוסטים שנצפו</h3>
+                            <div class="stat-number" id="totalPosts">0</div>
+                            <div class="stat-change" id="postsChange">-</div>
+                        </div>
+                    </div>
+                    
+                    <div class="summary-card engagement-card">
+                        <div class="card-icon">🎯</div>
+                        <div class="card-content">
+                            <h3>אחוז מעורבות</h3>
+                            <div class="stat-number" id="engagementRate">0%</div>
+                            <div class="stat-change" id="engagementChange">-</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Charts Section -->
+            <section class="charts-section">
+                <div class="charts-grid">
+                    
+                    <!-- Daily Activity Chart -->
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>פעילות יומית</h3>
+                            <div class="chart-controls">
+                                <button class="chart-btn active" data-chart="daily">יומי</button>
+                                <button class="chart-btn" data-chart="weekly">שבועי</button>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="dailyChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Platform Distribution -->
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>התפלגות לפי פלטפורמה</h3>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="platformChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Engagement Rate Over Time -->
+                    <div class="chart-container wide">
+                        <div class="chart-header">
+                            <h3>מגמת מעורבות לאורך זמן</h3>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="engagementTrendChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Comment Length Analysis -->
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>ניתוח אורך תגובות</h3>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="commentLengthChart"></canvas>
+                        </div>
+                    </div>
+                    
+                </div>
+            </section>
+
+            <!-- Data Tables Section -->
+            <section class="tables-section">
+                <div class="tables-grid">
+                    
+                    <!-- Top Authors -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>מחברים מובילים</h3>
+                            <span class="table-info">המחברים שהכי מגיבים להם</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table id="topAuthorsTable">
+                                <thead>
+                                    <tr>
+                                        <th>מחבר</th>
+                                        <th>תגובות</th>
+                                        <th>אחוז</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- יתווסף דינמית -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Top Comments -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>התגובות הטובות ביותר</h3>
+                            <span class="table-info">התגובות הארוכות והמפורטות ביותר</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table id="topCommentsTable">
+                                <thead>
+                                    <tr>
+                                        <th>תגובה</th>
+                                        <th>פלטפורמה</th>
+                                        <th>תאריך</th>
+                                        <th>אורך</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- יתווסף דינמית -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                </div>
+            </section>
+
+            <!-- Real-time Activity -->
+            <section class="activity-section">
+                <div class="activity-header">
+                    <h3>פעילות בזמן אמת</h3>
+                    <div class="activity-status">
+                        <span class="status-indicator" id="activityStatus"></span>
+                        <span id="activityText">מתחבר...</span>
+                    </div>
+                </div>
+                <div class="activity-feed" id="activityFeed">
+                    <!-- פעילות תתווסף דינמית -->
+                </div>
+            </section>
+
+            <!-- Settings & Controls -->
+            <section class="controls-section">
+                <div class="controls-grid">
+                    
+                    <div class="control-group">
+                        <h4>ניהול נתונים</h4>
+                        <button id="cleanDataBtn" class="control-btn warning">נקה נתונים ישנים</button>
+                        <button id="resetStatsBtn" class="control-btn danger">אפס כל הסטטיסטיקות</button>
+                    </div>
+                    
+                    <div class="control-group">
+                        <h4>ייצוא נתונים</h4>
+                        <button id="exportCsvBtn" class="control-btn">ייצא CSV</button>
+                        <button id="exportJsonBtn" class="control-btn">ייצא JSON</button>
+                    </div>
+                    
+                    <div class="control-group">
+                        <h4>הגדרות אנליטיקה</h4>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="realTimeUpdates" checked>
+                            עדכונים בזמן אמת
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="detailedLogging" checked>
+                            רישום מפורט
+                        </label>
+                    </div>
+                    
+                </div>
+            </section>
+
+        </div>
+
+        <!-- Footer -->
+        <footer class="dashboard-footer">
+            <div class="footer-content">
+                <div class="social-links">
+                    <a href="https://twitter.com/yuvalav" target="_blank" class="social-link twitter">
+                        <span class="social-icon">🐦</span> @yuvalav
+                    </a>
+                    <a href="https://instagram.com/yuval_770" target="_blank" class="social-link instagram">
+                        <span class="social-icon">📸</span> @yuval_770
+                    </a>
+                    <a href="https://linktr.ee/yuvai" target="_blank" class="social-link linktree">
+                        <span class="social-icon">🔗</span> linktr.ee/yuvai
+                    </a>
+                </div>
+                <div class="footer-info">
+                    <p>&copy; 2025 YUV.AI - Yuval Avidani. All rights reserved.</p>
+                    <p>גרסה 1.0.0 | דשבורד אנליטיקה מתקדם</p>
+                </div>
+            </div>
+        </footer>
+
+        <!-- Modal for Detailed Views -->
+        <div id="detailModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="modalTitle">פרטים</h3>
+                    <span class="modal-close">&times;</span>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    <!-- תוכן יתווסף דינמית -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+</html> 

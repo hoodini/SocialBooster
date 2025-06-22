@@ -252,7 +252,7 @@ runTest('Error handling validation', () => {
         const content = fs.readFileSync(filePath, 'utf8');
         
         const tryBlocks = (content.match(/try\s*{/g) || []).length;
-        const catchBlocks = (content.match(/catch\s*\(/g) || []).length;
+        const catchBlocks = (content.match(/}\s*catch\s*\(/g) || []).length;
         
         totalTryBlocks += tryBlocks;
         totalCatchBlocks += catchBlocks;

@@ -84,6 +84,15 @@ class SocialBotBackground {
                     sendResponse({ success: true, isValid });
                     break;
 
+                case 'REALTIME_ACTIVITY':
+                    // העברת פעילות זמן-אמת לדשבורד
+                    this.broadcastToTabs({
+                        type: 'NEW_ACTIVITY',
+                        data: message.data
+                    });
+                    sendResponse({ success: true });
+                    break;
+
                 default:
                     sendResponse({ success: false, error: 'Unknown message type' });
             }
@@ -158,6 +167,9 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
     }
 
     async callCohereStream(apiKey, prompt) {
+        console.log('Calling Cohere API with model:', 'command-a-03-2025');
+        console.log('API Key length:', apiKey ? apiKey.length : 'undefined');
+        
         const response = await fetch('https://api.cohere.com/v2/chat', {
             method: 'POST',
             headers: {
@@ -175,7 +187,14 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
         });
 
         if (!response.ok) {
-            throw new Error(`Cohere API error: ${response.status}`);
+            const errorText = await response.text();
+            console.error('Cohere API Error Details:', {
+                status: response.status,
+                statusText: response.statusText,
+                headers: Object.fromEntries(response.headers.entries()),
+                body: errorText
+            });
+            throw new Error(`Cohere API error: ${response.status} - ${errorText}`);
         }
 
         return await this.handleStreamResponse(response);
@@ -212,6 +231,8 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
                     }
                 }
             }
+        } catch (error) {
+            console.error('Stream reading error:', error);
         } finally {
             reader.releaseLock();
         }
@@ -251,6 +272,10 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
 
     async testCohereAPI(apiKey) {
         try {
+            console.log('Testing Cohere API...');
+            console.log('API Key provided:', apiKey ? 'Yes' : 'No');
+            console.log('API Key length:', apiKey ? apiKey.length : 'N/A');
+            
             const response = await fetch('https://api.cohere.com/v2/chat', {
                 method: 'POST',
                 headers: {
@@ -263,6 +288,21 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
                     max_tokens: 1
                 })
             });
+
+            console.log('API Test Response:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('API Test Error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
+            }
 
             return response.ok || response.status === 400;
         } catch (error) {
@@ -288,11 +328,29 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
     }
 
     async initializeStats() {
-        // Reset session start time on background script initialization
-        const storage = await chrome.storage.sync.get(['stats']);
-        if (storage.stats) {
-            storage.stats.sessionStart = Date.now();
-            await chrome.storage.sync.set({ stats: storage.stats });
+        try {
+            // Reset session start time on background script initialization
+            const storage = await chrome.storage.sync.get(['stats']);
+            if (storage.stats) {
+                storage.stats.sessionStart = Date.now();
+                await chrome.storage.sync.set({ stats: storage.stats });
+            }
+        } catch (error) {
+            console.error('Failed to initialize stats:', error);
+        }
+    }
+
+    // שליחת הודעה לכל הטאבים הפתוחים של הדשבורד
+    async broadcastToTabs(message) {
+        try {
+            const tabs = await chrome.tabs.query({ url: chrome.runtime.getURL('dashboard.html') + '*' });
+            tabs.forEach(tab => {
+                chrome.tabs.sendMessage(tab.id, message).catch(() => {
+                    // Tab might be closed, ignore error
+                });
+            });
+        } catch (error) {
+            console.log('Could not broadcast to tabs:', error);
         }
     }
 }

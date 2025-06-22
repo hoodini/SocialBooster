@@ -55,7 +55,7 @@ jsFiles.forEach(file => {
         
         // Check for proper error handling
         const tryBlocks = (content.match(/try\s*{/g) || []).length;
-        const catchBlocks = (content.match(/catch\s*\(/g) || []).length;
+        const catchBlocks = (content.match(/}\s*catch\s*\(/g) || []).length;
         
         if (tryBlocks !== catchBlocks) {
             console.log(`❌ Mismatched try/catch blocks: ${tryBlocks} try, ${catchBlocks} catch`);

@@ -81,6 +81,9 @@ class SocialBotPopup {
         document.getElementById('autoComments').addEventListener('change', () => this.saveAutomationSettings());
         document.getElementById('linkedinEnabled').addEventListener('change', () => this.saveAutomationSettings());
         document.getElementById('facebookEnabled').addEventListener('change', () => this.saveAutomationSettings());
+
+        // Dashboard
+        document.getElementById('dashboardBtn').addEventListener('click', () => this.openDashboard());
     }
 
     async saveApiKey() {
@@ -88,6 +91,20 @@ class SocialBotPopup {
         
         if (!apiKey) {
             this.showStatus('נא להזין מפתח API', 'error');
+            return;
+        }
+
+        // Validate API key format - Cohere accepts both trial keys and production keys
+        if (apiKey.length < 20) {
+            this.showStatus('מפתח API נראה קצר מדי', 'error');
+            console.error('API key seems too short.');
+            return;
+        }
+
+        // Additional validation for common patterns
+        if (apiKey.includes(' ') || apiKey.includes('\n') || apiKey.includes('\t')) {
+            this.showStatus('מפתח API מכיל תווים לא תקינים', 'error');
+            console.error('API key contains invalid characters (spaces, newlines, tabs).');
             return;
         }
 
@@ -100,12 +117,16 @@ class SocialBotPopup {
             this.showStatus('מפתח API נשמר בהצלחה!', 'success');
             document.getElementById('apiInfo').style.display = 'block';
         } else {
-            this.showStatus('מפתח API לא תקין', 'error');
+            this.showStatus('מפתח API לא תקין או אין גישה למודל', 'error');
         }
     }
 
     async testApiConnection(apiKey) {
         try {
+            console.log('Testing API connection...');
+            console.log('API Key provided:', apiKey ? 'Yes' : 'No');
+            console.log('API Key length:', apiKey ? apiKey.length : 'undefined');
+            
             const response = await fetch('https://api.cohere.com/v2/chat', {
                 method: 'POST',
                 headers: {
@@ -119,10 +140,22 @@ class SocialBotPopup {
                 })
             });
 
+            console.log('API Response:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
+            });
+
             if (response.ok || response.status === 400) { // 400 is OK for test
                 this.updateConnectionStatus(true);
                 return true;
             } else {
+                const errorText = await response.text();
+                console.error('API Test Error Details:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    body: errorText
+                });
                 this.updateConnectionStatus(false);
                 return false;
             }
@@ -370,6 +403,14 @@ class SocialBotPopup {
     updateUI() {
         // Any additional UI updates
         console.log('YUV.AI SocialBot Pro initialized');
+    }
+
+    openDashboard() {
+        // פתיחת דשבורד האנליטיקה בחלון נפרד
+        chrome.tabs.create({
+            url: chrome.runtime.getURL('dashboard.html'),
+            active: true
+        });
     }
 }
 
