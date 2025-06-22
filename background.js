@@ -167,7 +167,7 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
     }
 
     async callCohereStream(apiKey, prompt) {
-        console.log('Calling Cohere API with model:', 'command-a-03-2025');
+        console.log('Calling Cohere API v2 with model:', 'command-a-03-2025');
         console.log('API Key length:', apiKey ? apiKey.length : 'undefined');
         
         const response = await fetch('https://api.cohere.com/v2/chat', {
@@ -178,23 +178,27 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
             },
             body: JSON.stringify({
                 model: 'command-a-03-2025',
-                messages: [{ role: 'user', content: prompt }],
+                messages: [{ 
+                    role: 'user', 
+                    content: prompt 
+                }],
                 stream: true,
                 max_tokens: 150,
                 temperature: 0.7,
-                frequency_penalty: 0.3
+                frequency_penalty: 0.3,
+                presence_penalty: 0.0
             })
         });
 
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Cohere API Error Details:', {
+            console.error('Cohere API v2 Error Details:', {
                 status: response.status,
                 statusText: response.statusText,
                 headers: Object.fromEntries(response.headers.entries()),
                 body: errorText
             });
-            throw new Error(`Cohere API error: ${response.status} - ${errorText}`);
+            throw new Error(`Cohere API v2 error: ${response.status} - ${errorText}`);
         }
 
         return await this.handleStreamResponse(response);
@@ -221,11 +225,25 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
                             
                             const data = JSON.parse(jsonStr);
                             
+                            // Handle API v2 streaming format
                             if (data.type === 'content-delta' && data.delta?.message?.content?.text) {
                                 comment += data.delta.message.content.text;
                             }
+                            
+                            // Log different event types for debugging
+                            if (data.type === 'message-start') {
+                                console.log('Stream started:', data.id);
+                            } else if (data.type === 'content-start') {
+                                console.log('Content generation started');
+                            } else if (data.type === 'content-end') {
+                                console.log('Content generation ended');
+                            } else if (data.type === 'message-end') {
+                                console.log('Message completed:', data.delta?.finish_reason);
+                            }
+                            
                         } catch (e) {
                             // Skip invalid JSON lines
+                            console.log('Skipping invalid JSON line:', line);
                             continue;
                         }
                     }
@@ -237,7 +255,9 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
             reader.releaseLock();
         }
 
-        return comment.trim();
+        const finalComment = comment.trim();
+        console.log('Generated comment:', finalComment);
+        return finalComment;
     }
 
     async updateStats(statsData) {
@@ -272,10 +292,11 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
 
     async testCohereAPI(apiKey) {
         try {
-            console.log('Testing Cohere API...');
+            console.log('Testing Cohere API v2...');
             console.log('API Key provided:', apiKey ? 'Yes' : 'No');
             console.log('API Key length:', apiKey ? apiKey.length : 'N/A');
             
+            // Test with streaming disabled for simple validation
             const response = await fetch('https://api.cohere.com/v2/chat', {
                 method: 'POST',
                 headers: {
@@ -284,8 +305,12 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
                 },
                 body: JSON.stringify({
                     model: 'command-a-03-2025',
-                    messages: [{ role: 'user', content: 'test' }],
-                    max_tokens: 1
+                    messages: [{ 
+                        role: 'user', 
+                        content: 'hello' 
+                    }],
+                    stream: false,
+                    max_tokens: 5
                 })
             });
 
@@ -297,16 +322,38 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('API Test Error:', {
+                console.error('API Test Error Details:', {
                     status: response.status,
                     statusText: response.statusText,
                     body: errorText
                 });
+                
+                // Check for specific error types
+                if (response.status === 401) {
+                    console.error('Authentication failed - API key is invalid');
+                    return false;
+                } else if (response.status === 400) {
+                    console.log('Bad request - but API key might be valid');
+                    // For testing purposes, a 400 might still indicate valid auth
+                    return true;
+                }
+                
+                return false;
             }
 
-            return response.ok || response.status === 400;
+            // If we get here, the API call was successful
+            const responseData = await response.json();
+            console.log('API Test Success:', responseData);
+            return true;
+            
         } catch (error) {
-            console.error('API test failed:', error);
+            console.error('API test failed with error:', error);
+            
+            // Check if it's a network error vs auth error
+            if (error.message.includes('fetch')) {
+                console.error('Network error - check internet connection');
+            }
+            
             return false;
         }
     }

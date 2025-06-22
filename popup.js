@@ -123,7 +123,7 @@ class SocialBotPopup {
 
     async testApiConnection(apiKey) {
         try {
-            console.log('Testing API connection...');
+            console.log('Testing API connection with Cohere v2...');
             console.log('API Key provided:', apiKey ? 'Yes' : 'No');
             console.log('API Key length:', apiKey ? apiKey.length : 'undefined');
             
@@ -135,18 +135,29 @@ class SocialBotPopup {
                 },
                 body: JSON.stringify({
                     model: 'command-a-03-2025',
-                    messages: [{ role: 'user', content: 'test' }],
-                    max_tokens: 1
+                    messages: [{ 
+                        role: 'user', 
+                        content: 'hello' 
+                    }],
+                    stream: false,
+                    max_tokens: 5
                 })
             });
 
-            console.log('API Response:', {
+            console.log('API v2 Response:', {
                 status: response.status,
                 statusText: response.statusText,
                 ok: response.ok
             });
 
-            if (response.ok || response.status === 400) { // 400 is OK for test
+            if (response.ok) {
+                const responseData = await response.json();
+                console.log('API Test Success:', responseData);
+                this.updateConnectionStatus(true);
+                return true;
+            } else if (response.status === 400) {
+                // 400 might still indicate valid auth but bad request format
+                console.log('Bad request but API key might be valid');
                 this.updateConnectionStatus(true);
                 return true;
             } else {
@@ -172,10 +183,10 @@ class SocialBotPopup {
         
         if (connected) {
             statusDot.classList.add('connected');
-            statusText.textContent = 'מחובר ל-Cohere API';
+            statusText.textContent = 'מחובר ל-Cohere API v2 ✅';
         } else {
             statusDot.classList.remove('connected');
-            statusText.textContent = 'לא מחובר';
+            statusText.textContent = 'לא מחובר ❌';
         }
     }
 
