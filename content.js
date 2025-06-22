@@ -15,6 +15,17 @@ class SocialBotContentScript {
         this.observedElements = new WeakSet();
         this.analyticsDB = null;
         this.isGloballyEnabled = true; // מתג הפעלה כללי
+        
+        // Auto-scroll functionality
+        this.autoScrollEnabled = false;
+        this.isAutoScrolling = false;
+        this.currentScrollPosition = 0;
+        this.scrollPausedForPost = false;
+        this.waitingForUserAction = false;
+        this.autoScrollSpeed = 1; // 1=slow, 2=medium, 3=fast
+        this.scrollPauseTimeout = null;
+        this.pendingScrollContinue = null;
+        
         this.sessionData = {
             startTime: Date.now(),
             postsViewed: 0,
@@ -116,8 +127,15 @@ class SocialBotContentScript {
             const result = await chrome.storage.sync.get(['globallyEnabled']);
             this.isGloballyEnabled = result.globallyEnabled !== false; // Default to true
             
+            // טעינת הגדרות גלילה אוטומטית
+            const scrollResult = await chrome.storage.sync.get(['autoScrollEnabled', 'autoScrollSpeed']);
+            this.autoScrollEnabled = scrollResult.autoScrollEnabled || false;
+            this.autoScrollSpeed = scrollResult.autoScrollSpeed || 1;
+            
             console.log('🔄 Settings loaded:', {
                 globallyEnabled: this.isGloballyEnabled,
+                autoScrollEnabled: this.autoScrollEnabled,
+                autoScrollSpeed: this.autoScrollSpeed,
                 autoLikes: this.settings.autoLikes,
                 autoComments: this.settings.autoComments,
                 persona: this.currentPersonaId
@@ -159,7 +177,18 @@ class SocialBotContentScript {
                     // נקה את התורים בעת כיבוי
                     this.commentQueue = [];
                     this.processedPosts.clear();
+                    this.stopAutoScroll();
                     console.log('🛑 All queues cleared - Extension DISABLED');
+                }
+                break;
+            case 'TOGGLE_AUTO_SCROLL':
+                this.autoScrollEnabled = message.enabled;
+                this.autoScrollSpeed = message.speed || 1;
+                console.log('📜 Auto-scroll state changed:', this.autoScrollEnabled ? 'ENABLED' : 'DISABLED', 'Speed:', this.autoScrollSpeed);
+                if (this.autoScrollEnabled) {
+                    this.startAutoScroll();
+                } else {
+                    this.stopAutoScroll();
                 }
                 break;
             case 'MANUAL_LIKE':
@@ -365,11 +394,14 @@ class SocialBotContentScript {
                 console.log('👍 Auto-likes disabled');
             }
             
-            if (this.settings.autoComments) {
-                console.log('💬 Scheduling auto-comment in 3 seconds...');
+            // עיבוד תגובות אוטומטיות
+            if (this.settings.autoComments && this.currentPersonaId) {
                 setTimeout(() => this.processAutoComment(postId, postElement), 3000);
-            } else {
-                console.log('💬 Auto-comments disabled');
+            }
+            
+            // אם גלילה אוטומטית מופעלת, עצור את הגלילה עבור הפוסט הזה
+            if (this.autoScrollEnabled && this.isAutoScrolling) {
+                this.pauseAutoScrollForPost(postElement);
             }
         }
     }
@@ -1071,6 +1103,236 @@ class SocialBotContentScript {
         } catch (error) {
             console.error('Manual comment error:', error);
             return { success: false, error: `שגיאה: ${error.message}` };
+        }
+    }
+
+    // Auto-scroll functionality
+    startAutoScroll() {
+        if (!this.isGloballyEnabled) {
+            console.log('🛑 Cannot start auto-scroll - extension disabled globally');
+            return;
+        }
+        
+        if (this.isAutoScrolling) {
+            console.log('📜 Auto-scroll already running');
+            return;
+        }
+        
+        this.isAutoScrolling = true;
+        this.currentScrollPosition = window.scrollY;
+        console.log('📜 🚀 Starting auto-scroll with speed:', this.autoScrollSpeed);
+        
+        // הוספת אינדיקטור ויזואלי
+        this.showAutoScrollIndicator(true);
+        
+        // התחלת הגלילה
+        this.performAutoScroll();
+    }
+
+    stopAutoScroll() {
+        if (!this.isAutoScrolling) return;
+        
+        this.isAutoScrolling = false;
+        this.scrollPausedForPost = false;
+        this.waitingForUserAction = false;
+        
+        if (this.scrollPauseTimeout) {
+            clearTimeout(this.scrollPauseTimeout);
+            this.scrollPauseTimeout = null;
+        }
+        
+        if (this.pendingScrollContinue) {
+            clearTimeout(this.pendingScrollContinue);
+            this.pendingScrollContinue = null;
+        }
+        
+        console.log('📜 🛑 Auto-scroll stopped');
+        this.showAutoScrollIndicator(false);
+    }
+
+    performAutoScroll() {
+        if (!this.isAutoScrolling || !this.isGloballyEnabled) return;
+        
+        if (this.scrollPausedForPost || this.waitingForUserAction) {
+            // אם מחכים לפעולת משתמש, בדוק שוב בעוד זמן קצר
+            setTimeout(() => this.performAutoScroll(), 1000);
+            return;
+        }
+        
+        // חישוב מהירות גלילה בהתאם להגדרה
+        const baseSpeed = 2; // פיקסלים בסיסיים
+        const scrollAmount = baseSpeed * this.autoScrollSpeed;
+        
+        // גלילה עם וריאציה אקראית לתחושה אנושית
+        const randomVariation = Math.random() * 0.5 + 0.75; // בין 0.75 ל-1.25
+        const actualScrollAmount = Math.round(scrollAmount * randomVariation);
+        
+        // ביצוע הגלילה
+        this.currentScrollPosition += actualScrollAmount;
+        window.scrollTo({
+            top: this.currentScrollPosition,
+            behavior: 'smooth'
+        });
+        
+        // בדיקה אם הגענו לסוף הדף
+        if (this.currentScrollPosition >= document.body.scrollHeight - window.innerHeight - 100) {
+            console.log('📜 Reached end of page, pausing auto-scroll');
+            setTimeout(() => {
+                if (this.isAutoScrolling) {
+                    this.currentScrollPosition = document.body.scrollHeight - window.innerHeight;
+                    this.performAutoScroll();
+                }
+            }, 3000);
+            return;
+        }
+        
+        // המשך גלילה עם השהייה אקראית
+        const nextScrollDelay = this.getHumanScrollDelay();
+        setTimeout(() => this.performAutoScroll(), nextScrollDelay);
+    }
+
+    getHumanScrollDelay() {
+        // חישוב השהייה אנושית בהתאם למהירות
+        const baseDelay = {
+            1: 150, // איטי
+            2: 100, // בינוני  
+            3: 50   // מהיר
+        };
+        
+        const delay = baseDelay[this.autoScrollSpeed] || 100;
+        const randomVariation = Math.random() * 50; // וריאציה של עד 50ms
+        
+        return delay + randomVariation;
+    }
+
+    pauseAutoScrollForPost(postElement) {
+        if (!this.isAutoScrolling) return;
+        
+        this.scrollPausedForPost = true;
+        console.log('📜 ⏸️ Auto-scroll paused for post interaction');
+        
+        // אם יש תגובות אוטומטיות, חכה לפעולת המשתמש
+        if (this.settings.autoComments && this.currentPersonaId) {
+            this.waitingForUserAction = true;
+            console.log('📜 💬 Waiting for user to approve comment...');
+            
+            // מעקב אחר לחיצות על כפתורי שליחה
+            this.monitorSubmitButtons();
+        } else {
+            // אם אין תגובות, המשך אחרי זמן קצוב
+            const pauseDuration = this.getPostReadingTime();
+            this.scrollPauseTimeout = setTimeout(() => {
+                this.resumeAutoScroll();
+            }, pauseDuration);
+        }
+    }
+
+    monitorSubmitButtons() {
+        // מעקב אחר כפתורי שליחה שעלולים להיות מוקפים בירוק
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList') {
+                    // בדיקה אם נוסף כפתור שליחה מוקף בירוק
+                    const submitButtons = document.querySelectorAll('button[style*="border: 3px solid rgb(0, 255, 0)"]');
+                    if (submitButtons.length > 0) {
+                        console.log('📜 💬 Found highlighted submit button, monitoring for click...');
+                        
+                        // מעקב אחר לחיצה על כפתור השליחה
+                        submitButtons.forEach(button => {
+                            const clickHandler = () => {
+                                console.log('📜 ✅ User clicked submit button, resuming auto-scroll...');
+                                button.removeEventListener('click', clickHandler);
+                                observer.disconnect();
+                                setTimeout(() => this.resumeAutoScroll(), 2000); // המתנה קצרה לאחר השליחה
+                            };
+                            button.addEventListener('click', clickHandler);
+                        });
+                    }
+                }
+            });
+        });
+        
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        // timeout לביטול המעקב אם המשתמש לא פועל
+        setTimeout(() => {
+            observer.disconnect();
+            if (this.waitingForUserAction) {
+                console.log('📜 ⏰ User action timeout, resuming auto-scroll...');
+                this.resumeAutoScroll();
+            }
+        }, 30000); // 30 שניות timeout
+    }
+
+    resumeAutoScroll() {
+        if (!this.isAutoScrolling) return;
+        
+        this.scrollPausedForPost = false;
+        this.waitingForUserAction = false;
+        
+        if (this.scrollPauseTimeout) {
+            clearTimeout(this.scrollPauseTimeout);
+            this.scrollPauseTimeout = null;
+        }
+        
+        console.log('📜 ▶️ Resuming auto-scroll...');
+        
+        // המשך גלילה אחרי השהייה קצרה
+        setTimeout(() => this.performAutoScroll(), 1000);
+    }
+
+    getPostReadingTime() {
+        // זמן קריאה משוער בהתאם למהירות
+        const readingTimes = {
+            1: 4000, // איטי - 4 שניות
+            2: 2500, // בינוני - 2.5 שניות
+            3: 1500  // מהיר - 1.5 שניות
+        };
+        
+        const baseTime = readingTimes[this.autoScrollSpeed] || 2500;
+        const randomVariation = Math.random() * 1000; // וריאציה של עד שנייה
+        
+        return baseTime + randomVariation;
+    }
+
+    showAutoScrollIndicator(show) {
+        const existingIndicator = document.getElementById('auto-scroll-indicator');
+        
+        if (show && !existingIndicator) {
+            const indicator = document.createElement('div');
+            indicator.id = 'auto-scroll-indicator';
+            indicator.style.cssText = `
+                position: fixed;
+                top: 10px;
+                left: 10px;
+                background: linear-gradient(45deg, #667eea, #764ba2);
+                color: white;
+                padding: 8px 15px;
+                border-radius: 20px;
+                font-size: 12px;
+                font-weight: bold;
+                z-index: 10000;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                animation: pulse 2s infinite;
+            `;
+            indicator.innerHTML = `📜 גלילה אוטומטית פעילה (מהירות ${this.autoScrollSpeed})`;
+            document.body.appendChild(indicator);
+            
+            // הוספת אנימציה
+            const style = document.createElement('style');
+            style.textContent = `
+                @keyframes pulse {
+                    0%, 100% { opacity: 1; transform: scale(1); }
+                    50% { opacity: 0.8; transform: scale(1.05); }
+                }
+            `;
+            document.head.appendChild(style);
+            
+        } else if (!show && existingIndicator) {
+            existingIndicator.remove();
         }
     }
 }

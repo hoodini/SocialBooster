@@ -153,6 +153,57 @@
             </div>
         </div>
 
+        <!-- Auto-Scroll Settings -->
+        <div class="section">
+            <h3 data-translate="autoScrollTitle">📜 גלילה אוטומטית</h3>
+            
+            <div class="auto-scroll-controls">
+                <div class="option">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="autoScrollEnabled" />
+                        <span class="checkmark"></span>
+                        <span data-translate="autoScrollEnabled">הפעל גלילה אוטומטית חכמה</span>
+                    </label>
+                </div>
+
+                <div class="speed-control" id="speedControl" style="display: none;">
+                    <label data-translate="scrollSpeedLabel">מהירות גלילה:</label>
+                    <div class="speed-options">
+                        <label class="radio-label">
+                            <input type="radio" name="scrollSpeed" value="1" />
+                            <span class="radio-mark"></span>
+                            <span data-translate="speedSlow">🐌 איטי</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="scrollSpeed" value="2" checked />
+                            <span class="radio-mark"></span>
+                            <span data-translate="speedMedium">🚶 בינוני</span>
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="scrollSpeed" value="3" />
+                            <span class="radio-mark"></span>
+                            <span data-translate="speedFast">🏃 מהיר</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="auto-scroll-description">
+                    <small data-translate="autoScrollDescription">
+                        💡 הגלילה האוטומטית תעצור בכל פוסט, תמתין ללייקים ותגובות, ותמשיך אוטומטית לאחר אישורך
+                    </small>
+                </div>
+
+                <div class="auto-scroll-actions">
+                    <button id="startAutoScroll" class="btn-auto-scroll start" data-translate="startAutoScroll">
+                        ▶️ התחל גלילה אוטומטית
+                    </button>
+                    <button id="stopAutoScroll" class="btn-auto-scroll stop" data-translate="stopAutoScroll" style="display: none;">
+                        ⏹️ עצור גלילה אוטומטית
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Statistics -->
         <div class="section">
             <h3 data-translate="statisticsTitle">📊 סטטיסטיקות</h3>

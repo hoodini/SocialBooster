@@ -239,6 +239,128 @@ input:checked + .toggle-slider:before {
     line-height: 1.4;
 }
 
+/* Auto-Scroll Section */
+.auto-scroll-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.speed-control {
+    background: rgba(102, 126, 234, 0.1);
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    border-radius: 8px;
+    padding: 15px;
+}
+
+.speed-control label {
+    font-weight: 500;
+    margin-bottom: 10px;
+    display: block;
+    color: #495057;
+}
+
+.speed-options {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.radio-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 6px;
+    transition: background-color 0.3s ease;
+}
+
+.radio-label:hover {
+    background: rgba(102, 126, 234, 0.1);
+}
+
+.radio-label input[type="radio"] {
+    margin: 0;
+    width: 16px;
+    height: 16px;
+}
+
+.radio-mark {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ddd;
+    border-radius: 50%;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.radio-label input[type="radio"]:checked + .radio-mark {
+    border-color: #667eea;
+    background: #667eea;
+}
+
+.radio-label input[type="radio"]:checked + .radio-mark::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: white;
+}
+
+.auto-scroll-description {
+    background: rgba(255, 193, 7, 0.1);
+    border: 1px solid rgba(255, 193, 7, 0.3);
+    border-radius: 6px;
+    padding: 12px;
+}
+
+.auto-scroll-description small {
+    color: #856404;
+    line-height: 1.4;
+}
+
+.auto-scroll-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-auto-scroll {
+    flex: 1;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-family: inherit;
+}
+
+.btn-auto-scroll.start {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    color: white;
+}
+
+.btn-auto-scroll.start:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4);
+}
+
+.btn-auto-scroll.stop {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+    color: white;
+}
+
+.btn-auto-scroll.stop:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+}
+
 /* Sections */
 .section {
     padding: 20px;

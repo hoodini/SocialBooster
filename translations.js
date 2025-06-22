@@ -49,6 +49,17 @@ const translations = {
         extensionDisabled: "התוסף כבוי",
         toggleDescription: "השתמש במתג זה כדי להפעיל או לכבות את כל הפעילות האוטומטית של התוסף",
 
+        // Auto-Scroll
+        autoScrollTitle: "📜 גלילה אוטומטית",
+        autoScrollEnabled: "הפעל גלילה אוטומטית חכמה",
+        scrollSpeedLabel: "מהירות גלילה:",
+        speedSlow: "🐌 איטי",
+        speedMedium: "🚶 בינוני", 
+        speedFast: "🏃 מהיר",
+        autoScrollDescription: "💡 הגלילה האוטומטית תעצור בכל פוסט, תמתין ללייקים ותגובות, ותמשיך אוטומטית לאחר אישורך",
+        startAutoScroll: "▶️ התחל גלילה אוטומטית",
+        stopAutoScroll: "⏹️ עצור גלילה אוטומטית",
+
         // Footer
         createdBy: "יצר: יובל אבידני",
         
@@ -121,6 +132,17 @@ const translations = {
         extensionEnabled: "Extension Enabled",
         extensionDisabled: "Extension Disabled", 
         toggleDescription: "Use this toggle to enable or disable all automatic extension activity",
+
+        // Auto-Scroll
+        autoScrollTitle: "📜 Auto-Scroll",
+        autoScrollEnabled: "Enable Smart Auto-Scroll",
+        scrollSpeedLabel: "Scroll Speed:",
+        speedSlow: "🐌 Slow",
+        speedMedium: "🚶 Medium",
+        speedFast: "🏃 Fast", 
+        autoScrollDescription: "💡 Auto-scroll will pause at each post, wait for likes and comments, and continue automatically after your approval",
+        startAutoScroll: "▶️ Start Auto-Scroll",
+        stopAutoScroll: "⏹️ Stop Auto-Scroll",
 
         // Footer
         createdBy: "Created by: Yuval Avidani",

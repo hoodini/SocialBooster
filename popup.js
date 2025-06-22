@@ -28,6 +28,8 @@ class SocialBotPopup {
                 'facebookEnabled',
                 'preferHeartReaction',
                 'globallyEnabled',
+                'autoScrollEnabled',
+                'autoScrollSpeed',
                 'stats'
             ]);
 
@@ -58,6 +60,12 @@ class SocialBotPopup {
             const globallyEnabled = result.globallyEnabled !== false; // Default to true
             document.getElementById('globalToggle').checked = globallyEnabled;
             this.updateGlobalToggleUI(globallyEnabled);
+
+            // Load auto-scroll settings
+            document.getElementById('autoScrollEnabled').checked = result.autoScrollEnabled || false;
+            const scrollSpeed = result.autoScrollSpeed || 2;
+            document.querySelector(`input[name="scrollSpeed"][value="${scrollSpeed}"]`).checked = true;
+            this.updateAutoScrollUI(result.autoScrollEnabled || false);
 
             // Load stats
             if (result.stats) {
@@ -108,6 +116,26 @@ class SocialBotPopup {
         // Global toggle
         document.getElementById('globalToggle').addEventListener('change', (e) => {
             this.toggleGlobalState(e.target.checked);
+        });
+
+        // Auto-scroll controls
+        document.getElementById('autoScrollEnabled').addEventListener('change', (e) => {
+            this.updateAutoScrollUI(e.target.checked);
+            this.saveAutoScrollSettings();
+        });
+
+        document.querySelectorAll('input[name="scrollSpeed"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                this.saveAutoScrollSettings();
+            });
+        });
+
+        document.getElementById('startAutoScroll').addEventListener('click', () => {
+            this.startAutoScroll();
+        });
+
+        document.getElementById('stopAutoScroll').addEventListener('click', () => {
+            this.stopAutoScroll();
         });
     }
 
@@ -562,6 +590,107 @@ class SocialBotPopup {
         } catch (error) {
             console.error('Error toggling global state:', error);
             this.showStatus('שגיאה בשינוי מצב התוסף', 'error');
+        }
+    }
+
+    updateAutoScrollUI(enabled) {
+        const speedControl = document.getElementById('speedControl');
+        const startButton = document.getElementById('startAutoScroll');
+        const stopButton = document.getElementById('stopAutoScroll');
+        
+        if (enabled) {
+            speedControl.style.display = 'block';
+            startButton.style.display = 'inline-block';
+        } else {
+            speedControl.style.display = 'none';
+            startButton.style.display = 'inline-block';
+            stopButton.style.display = 'none';
+        }
+    }
+
+    async saveAutoScrollSettings() {
+        try {
+            const autoScrollEnabled = document.getElementById('autoScrollEnabled').checked;
+            const autoScrollSpeed = parseInt(document.querySelector('input[name="scrollSpeed"]:checked').value);
+            
+            await chrome.storage.sync.set({
+                autoScrollEnabled: autoScrollEnabled,
+                autoScrollSpeed: autoScrollSpeed
+            });
+            
+            console.log('📜 Auto-scroll settings saved:', { autoScrollEnabled, autoScrollSpeed });
+            
+        } catch (error) {
+            console.error('Error saving auto-scroll settings:', error);
+        }
+    }
+
+    async startAutoScroll() {
+        try {
+            const autoScrollEnabled = document.getElementById('autoScrollEnabled').checked;
+            const autoScrollSpeed = parseInt(document.querySelector('input[name="scrollSpeed"]:checked').value);
+            
+            if (!autoScrollEnabled) {
+                // הפעל את הגלילה האוטומטית אם לא מופעלת
+                document.getElementById('autoScrollEnabled').checked = true;
+                this.updateAutoScrollUI(true);
+                await this.saveAutoScrollSettings();
+            }
+            
+            // שליחת הודעה לכל הטאבים הפעילים
+            const tabs = await chrome.tabs.query({});
+            for (const tab of tabs) {
+                if (tab.url && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
+                    try {
+                        await chrome.tabs.sendMessage(tab.id, {
+                            type: 'TOGGLE_AUTO_SCROLL',
+                            enabled: true,
+                            speed: autoScrollSpeed
+                        });
+                    } catch (error) {
+                        console.log('Could not send auto-scroll message to tab:', tab.id);
+                    }
+                }
+            }
+            
+            // עדכון UI
+            document.getElementById('startAutoScroll').style.display = 'none';
+            document.getElementById('stopAutoScroll').style.display = 'inline-block';
+            
+            this.showStatus('📜 גלילה אוטומטית התחילה!', 'success');
+            
+        } catch (error) {
+            console.error('Error starting auto-scroll:', error);
+            this.showStatus('שגיאה בהפעלת גלילה אוטומטית', 'error');
+        }
+    }
+
+    async stopAutoScroll() {
+        try {
+            // שליחת הודעה לכל הטאבים הפעילים
+            const tabs = await chrome.tabs.query({});
+            for (const tab of tabs) {
+                if (tab.url && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
+                    try {
+                        await chrome.tabs.sendMessage(tab.id, {
+                            type: 'TOGGLE_AUTO_SCROLL',
+                            enabled: false
+                        });
+                    } catch (error) {
+                        console.log('Could not send auto-scroll stop message to tab:', tab.id);
+                    }
+                }
+            }
+            
+            // עדכון UI
+            document.getElementById('startAutoScroll').style.display = 'inline-block';
+            document.getElementById('stopAutoScroll').style.display = 'none';
+            
+            this.showStatus('📜 גלילה אוטומטית נעצרה', 'warning');
+            
+        } catch (error) {
+            console.error('Error stopping auto-scroll:', error);
+            this.showStatus('שגיאה בעצירת גלילה אוטומטית', 'error');
         }
     }
 }
