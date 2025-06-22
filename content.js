@@ -848,9 +848,13 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             
             const postId = this.getPostId(postElement);
             
-            // בדיקה אם התוסף מופעל גלובלית
-            if (!this.isGloballyEnabled) {
-                console.log('🛑 Extension globally disabled - skipping post processing');
+            // בדיקה אם התוסף מופעל גלובלית - בדיקה מחמירה
+            if (!this.isGloballyEnabled || !this.settings.globallyEnabled || !settings.globallyEnabled) {
+                console.log('🛑 Extension globally disabled - skipping post processing:', {
+                    thisEnabled: this.isGloballyEnabled,
+                    settingsEnabled: this.settings.globallyEnabled,
+                    globalSettingsEnabled: settings.globallyEnabled
+                });
                 return;
             }
             
@@ -955,9 +959,13 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         }
 
         async processAutoLike(postId, postElement) {
-            // בדיקה אם התוסף מופעל גלובלית
-            if (!this.isGloballyEnabled) {
-                console.log('🛑 Auto-like cancelled - extension disabled globally');
+            // בדיקה אם התוסף מופעל גלובלית - בדיקה כפולה
+            if (!this.isGloballyEnabled || !this.settings.globallyEnabled || !this.settings.autoLikes) {
+                console.log('🛑 Auto-like cancelled - extension disabled:', {
+                    isGloballyEnabled: this.isGloballyEnabled,
+                    settingsGloballyEnabled: this.settings.globallyEnabled,
+                    autoLikes: this.settings.autoLikes
+                });
                 return;
             }
             
@@ -998,6 +1006,7 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                         
                         const author = this.extractPostAuthor(postElement);
                         this.addRealtimeActivity(`❤️ נתתי לב אהבה לפוסט של ${author}`);
+                        this.addActivityNotification('like', `לב אהבה נשלח לפוסט של ${author}`);
                         
                         // עדכון סטטיסטיקות אם ההקשר תקף
                         if (chrome.runtime?.id) {
@@ -1023,6 +1032,9 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     if (chrome.runtime?.id) {
                         chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data: { likes: 1 } });
                     }
+                    
+                    const author = this.extractPostAuthor(postElement);
+                    this.addActivityNotification('like', `לייק נשלח לפוסט של ${author}`);
                     console.log('Successfully auto-liked post:', postId);
                 } else {
                     console.log('Like may not have been registered for post:', postId);
@@ -1150,17 +1162,23 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         }
 
         async processAutoComment(postId, postElement) {
-            // בדיקת בטיחות
+            // בדיקת בטיחות ובדיקת הפעלה גלובלית
             if (!this.commentedPosts || !this.settings) {
                 console.log('⚠️ Class not fully initialized for comments');
                 return;
             }
             
-            // בדיקה אם התוסף מופעל גלובלית
-            if (!this.isGloballyEnabled) {
-                console.log('🛑 Auto-comment cancelled - extension disabled globally');
+            // בדיקה אם התוסף מופעל גלובלית ותגובות מופעלות
+            if (!this.isGloballyEnabled || !this.settings.globallyEnabled || !this.settings.autoComments) {
+                console.log('🛑 Auto-comment cancelled - extension or comments disabled:', {
+                    isGloballyEnabled: this.isGloballyEnabled,
+                    settingsGloballyEnabled: this.settings.globallyEnabled,
+                    autoComments: this.settings.autoComments
+                });
                 return;
             }
+            
+
             
             // בדיקה אם כבר הגבנו לפוסט הזה
             if (this.commentedPosts.has(postId)) {
@@ -1716,21 +1734,190 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 return;
             }
             
-            // בדיקה אם יש פוסטים גלויים שטרם עובדו
-            const visiblePosts = this.findVisibleUnprocessedPosts();
-            if (visiblePosts.length > 0) {
-                console.log('📜 Found', visiblePosts.length, 'unprocessed posts, pausing scroll...');
-                // עצור גלילה ותן זמן לעיבוד הפוסטים
-                setTimeout(() => this.performAutoScroll(), 3000);
-                return;
+            try {
+                // 🎯 Smart Post Detection and Positioning
+                const smartPosts = this.findSmartVisiblePosts();
+                const unprocessedPosts = smartPosts.filter(post => 
+                    !this.processedPosts.has(this.getPostId(post.element))
+                );
+                
+                if (unprocessedPosts.length > 0) {
+                    console.log('📜 Smart scroll: Found', unprocessedPosts.length, 'unprocessed posts');
+                    
+                    // מצא את הפוסט הטוב ביותר לעיבוד
+                    const targetPost = this.selectOptimalPost(unprocessedPosts);
+                    this.scrollToOptimalPosition(targetPost);
+                    
+                    // המתן לעיבוד הפוסט עם timeout חכם
+                    this.waitForPostProcessing(targetPost);
+                    return;
+                }
+
+                // 🚀 Intelligent Scrolling - חפש פוסט הבא
+                const nextPostPosition = this.findNextPostPosition();
+                if (nextPostPosition !== null) {
+                    this.smoothScrollToPosition(nextPostPosition);
+                } else {
+                    // גלילה רגילה אם לא מצאנו פוסט ספציפי
+                    this.performRegularScroll();
+                }
+                
+            } catch (error) {
+                console.error('Error in smart auto-scroll:', error);
+                // חזור לגלילה רגילה במקרה של שגיאה
+                this.performRegularScroll();
+            }
+        }
+
+        // 🎯 Smart Post Detection
+        findSmartVisiblePosts() {
+            const posts = this.findPosts();
+            const viewport = {
+                top: window.scrollY,
+                bottom: window.scrollY + window.innerHeight,
+                center: window.scrollY + (window.innerHeight / 2)
+            };
+
+            return posts.map(post => {
+                const rect = post.getBoundingClientRect();
+                const absoluteTop = rect.top + window.scrollY;
+                const absoluteBottom = rect.bottom + window.scrollY;
+                const postCenter = absoluteTop + (rect.height / 2);
+                
+                return {
+                    element: post,
+                    rect: rect,
+                    absoluteTop: absoluteTop,
+                    absoluteBottom: absoluteBottom,
+                    postCenter: postCenter,
+                    distanceFromViewportCenter: Math.abs(postCenter - viewport.center),
+                    isVisible: rect.top >= -200 && rect.bottom <= window.innerHeight + 200,
+                    isOptimallyVisible: rect.top >= 100 && rect.bottom <= window.innerHeight - 100,
+                    visibilityPercentage: this.calculateVisibilityPercentage(rect)
+                };
+            }).filter(post => post.isVisible);
+        }
+
+        // 📐 Calculate visibility percentage
+        calculateVisibilityPercentage(rect) {
+            const viewportTop = 0;
+            const viewportBottom = window.innerHeight;
+            
+            const visibleTop = Math.max(viewportTop, rect.top);
+            const visibleBottom = Math.min(viewportBottom, rect.bottom);
+            const visibleHeight = Math.max(0, visibleBottom - visibleTop);
+            
+            return (visibleHeight / rect.height) * 100;
+        }
+
+        // 🎯 Select optimal post for processing
+        selectOptimalPost(posts) {
+            // מיין לפי מרחק ממרכז המסך ואחוז הנראות
+            return posts.sort((a, b) => {
+                const scoreA = a.visibilityPercentage - (a.distanceFromViewportCenter / 10);
+                const scoreB = b.visibilityPercentage - (b.distanceFromViewportCenter / 10);
+                return scoreB - scoreA;
+            })[0];
+        }
+
+        // 🎯 Position optimally for post processing
+        scrollToOptimalPosition(targetPost) {
+            const optimalPosition = targetPost.absoluteTop - (window.innerHeight * 0.25); // 25% from top
+            const currentPosition = window.scrollY;
+            const distance = Math.abs(optimalPosition - currentPosition);
+            
+            if (distance > 100) { // Only scroll if significant distance
+                console.log('🎯 Positioning for optimal post processing...', distance, 'px');
+                window.scrollTo({
+                    top: optimalPosition,
+                    behavior: 'smooth'
+                });
+                
+                // המתן לסיום הגלילה
+                setTimeout(() => {
+                    console.log('📍 Positioned at optimal location for post processing');
+                }, Math.min(distance / 2, 1000)); // זמן המתנה יחסי למרחק
+            }
+        }
+
+        // ⏳ Smart wait for post processing
+        waitForPostProcessing(targetPost) {
+            const postId = this.getPostId(targetPost.element);
+            const maxWaitTime = 12000; // 12 seconds max
+            const checkInterval = 500; // Check every 500ms
+            let elapsedTime = 0;
+            
+            console.log('⏳ Waiting for post processing:', postId.substring(0, 20) + '...');
+            
+            const checkProcessing = () => {
+                elapsedTime += checkInterval;
+                
+                // Check if post was processed
+                if (this.processedPosts.has(postId)) {
+                    console.log('✅ Post processed successfully, continuing scroll...');
+                    setTimeout(() => this.performAutoScroll(), 1500);
+                    return;
+                }
+                
+                // Check if max wait time reached
+                if (elapsedTime >= maxWaitTime) {
+                    console.log('⏰ Max wait time reached for post, continuing scroll...');
+                    this.processedPosts.add(postId); // Mark as processed to avoid infinite loop
+                    setTimeout(() => this.performAutoScroll(), 500);
+                    return;
+                }
+                
+                // Continue waiting
+                setTimeout(checkProcessing, checkInterval);
+            };
+            
+            setTimeout(checkProcessing, checkInterval);
+        }
+
+        // 🔍 Find next post position
+        findNextPostPosition() {
+            const posts = this.findPosts();
+            const currentScroll = window.scrollY;
+            const viewportHeight = window.innerHeight;
+            
+            // Find the next post below current viewport
+            for (const post of posts) {
+                const rect = post.getBoundingClientRect();
+                const absoluteTop = rect.top + currentScroll;
+                
+                if (absoluteTop > currentScroll + viewportHeight + 100) {
+                    return absoluteTop - (viewportHeight * 0.25);
+                }
             }
             
+            return null; // No next post found
+        }
+
+        // 🌊 Smooth scroll to position
+        smoothScrollToPosition(targetPosition) {
+            const currentPosition = window.scrollY;
+            const distance = targetPosition - currentPosition;
+            
+            console.log('🌊 Smooth scrolling to next post position...');
+            
+            window.scrollTo({
+                top: targetPosition,
+                behavior: 'smooth'
+            });
+            
+            // Continue scrolling after reaching target
+            const scrollTime = Math.min(Math.abs(distance) / 2, 2000);
+            setTimeout(() => this.performAutoScroll(), scrollTime);
+        }
+
+        // 📜 Regular scroll fallback
+        performRegularScroll() {
             // חישוב מהירות גלילה בהתאם להגדרה
-            const baseSpeed = 3; // פיקסלים בסיסיים (הגדלתי מ-2)
+            const baseSpeed = 4; // פיקסלים בסיסיים (מעט יותר מהיר)
             const scrollAmount = baseSpeed * this.autoScrollSpeed;
             
             // גלילה עם וריאציה אקראית לתחושה אנושית
-            const randomVariation = Math.random() * 0.5 + 0.75; // בין 0.75 ל-1.25
+            const randomVariation = Math.random() * 0.4 + 0.8; // בין 0.8 ל-1.2
             const actualScrollAmount = Math.round(scrollAmount * randomVariation);
             
             // ביצוע הגלילה
@@ -1741,12 +1928,12 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             });
             
             // בדיקה אם הגענו לסוף הדף
-            if (this.currentScrollPosition >= document.body.scrollHeight - window.innerHeight - 200) {
+            if (this.currentScrollPosition >= document.body.scrollHeight - window.innerHeight - 300) {
                 console.log('📜 Reached end of page, pausing auto-scroll');
                 setTimeout(() => {
                     if (this.isAutoScrolling) {
                         // נסה לטעון עוד תוכן או המשך
-                        this.currentScrollPosition = document.body.scrollHeight - window.innerHeight - 100;
+                        this.currentScrollPosition = document.body.scrollHeight - window.innerHeight - 200;
                         this.performAutoScroll();
                     }
                 }, 5000);
@@ -1895,27 +2082,113 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             if (!indicator) return;
             
             const visiblePosts = this.findVisibleUnprocessedPosts();
-            const processedCount = this.processedPosts.size;
+            const scrollProgress = Math.round((window.scrollY / (document.body.scrollHeight - window.innerHeight)) * 100);
             
-            let status = '📜 גלילה אוטומטית';
-            let details = `מהירות ${this.autoScrollSpeed}`;
+            const speedEmoji = {
+                1: '🐌',
+                2: '🚶', 
+                3: '🏃'
+            };
             
-            if (this.scrollPausedForPost) {
-                status = '⏸️ מעבד פוסט';
-                details = `נמצאו ${visiblePosts.length} פוסטים`;
+            // 🎯 Enhanced Status Detection
+            let statusText = '📜 גולל...';
+            let statusColor = '#4CAF50';
+            
+            if (!this.isGloballyEnabled || !this.settings.globallyEnabled) {
+                statusText = '🛑 מושבת';
+                statusColor = '#f44336';
+            } else if (this.scrollPausedForPost) {
+                statusText = '⏸️ מחכה לעיבוד...';
+                statusColor = '#FF9800';
             } else if (this.waitingForUserAction) {
-                status = '⏳ ממתין לאישור';
-                details = 'אשר תגובה להמשך';
-            } else {
-                details = `עובד פוסט ${processedCount}`;
+                statusText = '👤 מחכה לפעולת משתמש...';
+                statusColor = '#2196F3';
+            } else if (this.isProcessing) {
+                statusText = '🔄 מעבד פוסט...';
+                statusColor = '#9C27B0';
             }
             
+            // 📊 Session Statistics
+            const sessionStats = this.sessionData || { likesGiven: 0, commentsPosted: 0, postsViewed: 0 };
+            
             indicator.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <div>${status}</div>
-                    <div style="font-size: 10px; opacity: 0.8;">${details}</div>
+                <div style="display: flex; flex-direction: column; gap: 4px; min-width: 220px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="font-size: 16px;">${speedEmoji[this.autoScrollSpeed] || '🚶'}</div>
+                        <div style="flex: 1;">
+                            <div style="font-size: 11px; color: ${statusColor}; font-weight: bold;">
+                                ${statusText}
+                            </div>
+                            <div style="font-size: 10px; opacity: 0.8;">
+                                פוסטים גלויים: ${visiblePosts.length} | התקדמות: ${scrollProgress}%
+                            </div>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; font-size: 10px; opacity: 0.9; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 4px;">
+                        <span>👍 ${sessionStats.likesGiven}</span>
+                        <span>💬 ${sessionStats.commentsPosted || 0}</span>
+                        <span>👀 ${sessionStats.postsViewed}</span>
+                    </div>
                 </div>
             `;
+        }
+
+        // 🎯 Enhanced Activity Monitoring
+        addActivityNotification(type, message, duration = 3000) {
+            const notification = document.createElement('div');
+            notification.style.cssText = `
+                position: fixed;
+                top: 80px;
+                right: 20px;
+                background: linear-gradient(45deg, #667eea, #764ba2);
+                color: white;
+                padding: 12px 16px;
+                border-radius: 8px;
+                font-size: 12px;
+                font-weight: bold;
+                z-index: 10001;
+                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                animation: slideIn 0.3s ease-out;
+                max-width: 300px;
+            `;
+            
+            const emoji = {
+                'like': '👍',
+                'comment': '💬',
+                'scroll': '📜',
+                'error': '❌',
+                'success': '✅'
+            };
+            
+            notification.innerHTML = `${emoji[type] || '🤖'} ${message}`;
+            document.body.appendChild(notification);
+            
+            // Add slide-in animation if not exists
+            if (!document.getElementById('activity-notification-style')) {
+                const style = document.createElement('style');
+                style.id = 'activity-notification-style';
+                style.textContent = `
+                    @keyframes slideIn {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    @keyframes slideOut {
+                        from { transform: translateX(0); opacity: 1; }
+                        to { transform: translateX(100%); opacity: 0; }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // Auto remove
+            setTimeout(() => {
+                notification.style.animation = 'slideOut 0.3s ease-in';
+                setTimeout(() => {
+                    if (notification.parentElement) {
+                        notification.remove();
+                    }
+                }, 300);
+            }, duration);
         }
 
         // 🚀 Start Bot
@@ -2041,35 +2314,86 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         }
 
         findCommentBox(postElement) {
-            // סלקטורים לתיבת התגובה
+            // 🔍 Enhanced Comment Box Detection
             const selectors = [
+                // LinkedIn specific selectors
+                'div[contenteditable="true"][role="textbox"]',
+                '.ql-editor[contenteditable="true"]',
+                '.mentions-texteditor__content[contenteditable="true"]',
+                '.comments-comment-texteditor .ql-editor',
+                'div[data-placeholder*="comment"]',
+                'div[data-placeholder*="תגובה"]',
+                
+                // Generic selectors
                 'div[contenteditable="true"]',
                 'textarea[placeholder*="comment"]',
                 'textarea[placeholder*="תגובה"]',
-                '.ql-editor',
-                '.mentions-texteditor__content',
-                '.comments-comment-texteditor'
+                'textarea[placeholder*="Comment"]',
+                'textarea[aria-label*="comment"]',
+                'textarea[aria-label*="תגובה"]',
+                
+                // Fallback selectors
+                '.comment-box',
+                '.comment-input',
+                '[data-test-id="comment-texteditor"]'
             ];
             
+            // First, try to find within the post element
             for (const selector of selectors) {
                 const commentBox = postElement.querySelector(selector);
-                if (commentBox) {
-                    console.log('💬 Found comment box with selector:', selector);
+                if (commentBox && this.isValidCommentBox(commentBox)) {
+                    console.log('💬 Found comment box in post with selector:', selector);
                     return commentBox;
                 }
             }
             
-            // חיפוש גם בגוף הדף (לפעמים התיבה נוספת מחוץ לפוסט)
+            // Then, try to find in the document (for modal comment boxes)
             for (const selector of selectors) {
-                const commentBox = document.querySelector(selector);
-                if (commentBox && commentBox.offsetParent) { // וודא שהיא גלויה
-                    console.log('💬 Found comment box in document with selector:', selector);
-                    return commentBox;
+                const commentBoxes = document.querySelectorAll(selector);
+                for (const commentBox of commentBoxes) {
+                    if (this.isValidCommentBox(commentBox) && this.isCommentBoxVisible(commentBox)) {
+                        console.log('💬 Found visible comment box in document with selector:', selector);
+                        return commentBox;
+                    }
                 }
             }
             
-            console.log('❌ Comment box not found');
+            console.log('❌ Comment box not found for post');
             return null;
+        }
+
+        // 🔍 Validate if element is a proper comment box
+        isValidCommentBox(element) {
+            if (!element) return false;
+            
+            // Check if it's editable
+            const isEditable = element.contentEditable === 'true' || 
+                              element.tagName === 'TEXTAREA' ||
+                              element.getAttribute('role') === 'textbox';
+            
+            // Check if it's not disabled
+            const isEnabled = !element.disabled && !element.hasAttribute('disabled');
+            
+            // Check minimum size (avoid tiny elements)
+            const rect = element.getBoundingClientRect();
+            const hasReasonableSize = rect.width > 50 && rect.height > 20;
+            
+            return isEditable && isEnabled && hasReasonableSize;
+        }
+
+        // 👁️ Check if comment box is visible
+        isCommentBoxVisible(element) {
+            if (!element || !element.offsetParent) return false;
+            
+            const style = window.getComputedStyle(element);
+            const isVisible = style.display !== 'none' && 
+                            style.visibility !== 'hidden' && 
+                            style.opacity !== '0';
+            
+            const rect = element.getBoundingClientRect();
+            const isInViewport = rect.top >= -100 && rect.bottom <= window.innerHeight + 100;
+            
+            return isVisible && isInViewport;
         }
 
         async generateComment(postContent, author, personaId) {

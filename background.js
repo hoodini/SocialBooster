@@ -133,11 +133,190 @@ class SocialBotBackground {
             throw new Error('לא נמצאה פרסונה נבחרת');
         }
 
-        // Build prompt
-        const prompt = this.buildPrompt(persona, postContent, replyContext);
+        // 🤖 AI Agent System - Multi-step comment generation
+        return await this.aiAgentCommentGeneration(apiKey, persona, postContent, replyContext);
+    }
 
-        // Call Cohere API with streaming
+    // 🤖 AI Agent System for Advanced Comment Generation
+    async aiAgentCommentGeneration(apiKey, persona, postContent, replyContext = null) {
+        console.log('🤖 Starting AI Agent comment generation process...');
+        
+        try {
+            // Step 1: Content Analysis Agent
+            const analysis = await this.contentAnalysisAgent(apiKey, postContent, replyContext);
+            console.log('📊 Content analysis completed:', analysis);
+            
+            // Step 2: Comment Generation Agent
+            const initialComment = await this.commentGenerationAgent(apiKey, persona, postContent, replyContext, analysis);
+            console.log('💬 Initial comment generated:', initialComment);
+            
+            // Step 3: Quality Review Agent
+            const reviewedComment = await this.qualityReviewAgent(apiKey, persona, initialComment, postContent, analysis);
+            console.log('✅ Comment reviewed and improved:', reviewedComment);
+            
+            // Step 4: Final Validation Agent
+            const finalComment = await this.finalValidationAgent(apiKey, persona, reviewedComment, postContent);
+            console.log('🎯 Final comment validated:', finalComment);
+            
+            return finalComment;
+            
+        } catch (error) {
+            console.error('❌ AI Agent system error:', error);
+            // Fallback to simple generation
+            return await this.fallbackCommentGeneration(apiKey, persona, postContent, replyContext);
+        }
+    }
+
+    // Agent 1: Content Analysis
+    async contentAnalysisAgent(apiKey, postContent, replyContext) {
+        const prompt = `You are a content analysis AI agent. Analyze the following social media content and provide structured insights.
+
+Post Content: "${postContent}"
+${replyContext ? `Reply Context: "${replyContext}"` : ''}
+
+Analyze and respond with the following structure:
+{
+  "sentiment": "positive/negative/neutral",
+  "topic": "main topic of the post",
+  "tone": "formal/casual/professional/humorous",
+  "language": "hebrew/english",
+  "keywords": ["key1", "key2", "key3"],
+  "engagement_type": "informative/emotional/question/announcement",
+  "recommended_response_style": "supportive/questioning/informative/humorous"
+}
+
+Provide ONLY the JSON response, nothing else.`;
+
+        const response = await this.callCohereAPI(apiKey, prompt);
+        try {
+            return JSON.parse(response);
+        } catch (e) {
+            return {
+                sentiment: "neutral",
+                topic: "general",
+                tone: "casual",
+                language: "hebrew",
+                keywords: [],
+                engagement_type: "informative",
+                recommended_response_style: "supportive"
+            };
+        }
+    }
+
+    // Agent 2: Comment Generation
+    async commentGenerationAgent(apiKey, persona, postContent, replyContext, analysis) {
+        const languageInstruction = analysis.language === 'english' ? 
+            "Write your response in English" : 
+            "כתב את התגובה בעברית";
+
+        const prompt = `You are a comment generation AI agent. Generate a social media comment based on the analysis and persona.
+
+Persona: ${persona.name}
+Description: ${persona.description}
+Writing Examples: ${persona.examples.join(' | ')}
+
+Content Analysis:
+- Sentiment: ${analysis.sentiment}
+- Topic: ${analysis.topic}
+- Tone: ${analysis.tone}
+- Recommended Style: ${analysis.recommended_response_style}
+
+Post Content: "${postContent}"
+${replyContext ? `Replying to: "${replyContext}"` : ''}
+
+Generate a comment that:
+- Matches the persona's writing style exactly
+- Responds appropriately to the ${analysis.sentiment} sentiment
+- Uses a ${analysis.recommended_response_style} approach
+- Stays relevant to the topic: ${analysis.topic}
+- ${languageInstruction}
+- Is 20-40 words maximum
+- Feels natural and authentic
+
+Return ONLY the comment text, no quotes or extra formatting.`;
+
+        return await this.callCohereAPI(apiKey, prompt);
+    }
+
+    // Agent 3: Quality Review
+    async qualityReviewAgent(apiKey, persona, comment, postContent, analysis) {
+        const prompt = `You are a quality review AI agent. Review and improve the generated comment.
+
+Original Post: "${postContent}"
+Generated Comment: "${comment}"
+Persona Style: ${persona.examples.join(' | ')}
+Content Analysis: ${JSON.stringify(analysis)}
+
+Review the comment for:
+1. Style consistency with persona examples
+2. Appropriateness to the post content
+3. Natural language flow
+4. Length (should be 20-40 words)
+5. Authenticity
+
+If the comment needs improvement, provide a better version.
+If it's already good, return it as is.
+
+Return ONLY the final comment text, no explanations.`;
+
+        return await this.callCohereAPI(apiKey, prompt);
+    }
+
+    // Agent 4: Final Validation
+    async finalValidationAgent(apiKey, persona, comment, postContent) {
+        const prompt = `You are a final validation AI agent. Perform a final check on this comment.
+
+Post: "${postContent}"
+Comment: "${comment}"
+Persona: ${persona.name}
+
+Final validation checklist:
+- Does it sound like something ${persona.name} would write?
+- Is it appropriate and respectful?
+- Is it engaging but not controversial?
+- Is the length appropriate (20-40 words)?
+- Does it add value to the conversation?
+
+If it passes all checks, return the comment as is.
+If any issues, provide a corrected version.
+
+Return ONLY the final comment text.`;
+
+        return await this.callCohereAPI(apiKey, prompt);
+    }
+
+    // Fallback generation method
+    async fallbackCommentGeneration(apiKey, persona, postContent, replyContext) {
+        console.log('🔄 Using fallback comment generation...');
+        const prompt = this.buildPrompt(persona, postContent, replyContext);
         return await this.callCohereStream(apiKey, prompt);
+    }
+
+    // Simple API call method for agents
+    async callCohereAPI(apiKey, prompt) {
+        const response = await fetch('https://api.cohere.ai/v1/generate', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'command-xlarge-nightly',
+                prompt: prompt,
+                max_tokens: 100,
+                temperature: 0.7,
+                k: 0,
+                stop_sequences: [],
+                return_likelihoods: 'NONE'
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`Cohere API error: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        return data.generations[0]?.text?.trim() || '';
     }
 
     buildPrompt(persona, postContent, replyContext = null) {
