@@ -508,6 +508,12 @@ class SocialBotContentScript {
     }
 
     observeExistingPosts(observer) {
+        // בדיקת בטיחות
+        if (!this.observedElements) {
+            console.log('⚠️ observedElements not initialized yet');
+            return;
+        }
+        
         const posts = this.findPosts();
         posts.forEach(post => {
             if (!this.observedElements.has(post)) {
@@ -524,7 +530,8 @@ class SocialBotContentScript {
                     if (node.nodeType === Node.ELEMENT_NODE) {
                         const posts = this.findPostsInElement(node);
                         posts.forEach(post => {
-                            if (!this.observedElements.has(post)) {
+                            // בדיקת בטיחות
+                            if (this.observedElements && !this.observedElements.has(post)) {
                                 observer.observe(post);
                                 this.observedElements.add(post);
                             }
@@ -641,6 +648,12 @@ class SocialBotContentScript {
     }
 
     async handlePostVisible(postElement) {
+        // בדיקת בטיחות - וודא שכל הפרופרטיז אותחלו
+        if (!this.processedPosts || !this.viewTimers || !this.settings) {
+            console.log('⚠️ Class not fully initialized yet, skipping post processing');
+            return;
+        }
+        
         const postId = this.getPostId(postElement);
         
         // בדיקה אם התוסף מופעל גלובלית
@@ -674,7 +687,9 @@ class SocialBotContentScript {
             });
 
             // רישום הפוסט שנצפה
-            this.sessionData.postsViewed++;
+            if (this.sessionData) {
+                this.sessionData.postsViewed++;
+            }
             await this.recordViewedPost(postElement);
 
             if (this.settings.autoLikes) {
@@ -716,6 +731,11 @@ class SocialBotContentScript {
     }
 
     handlePostHidden(postElement) {
+        // בדיקת בטיחות
+        if (!this.viewTimers) {
+            return;
+        }
+        
         const postId = this.getPostId(postElement);
         if (postId && this.viewTimers.has(postId)) {
             this.viewTimers.delete(postId);
@@ -926,48 +946,80 @@ class SocialBotContentScript {
     }
 
     async processAutoComment(postId, postElement) {
+        // בדיקת בטיחות
+        if (!this.commentedPosts || !this.settings) {
+            console.log('⚠️ Class not fully initialized for comments');
+            return;
+        }
+        
         // בדיקה אם התוסף מופעל גלובלית
         if (!this.isGloballyEnabled) {
             console.log('🛑 Auto-comment cancelled - extension disabled globally');
             return;
         }
         
-        // בדיקה אם כבר הגבתי לפוסט הזה (בזיכרון)
+        // בדיקה אם כבר הגבנו לפוסט הזה
         if (this.commentedPosts.has(postId)) {
-            console.log('💬 Already commented on this post (in memory), skipping:', postId.substring(0, 20) + '...');
-            return;
-        }
-
-        // בדיקה האם כבר יש תגובה שלי בפוסט (בדיקה ויזואלית)
-        if (this.hasMyExistingComment(postElement)) {
-            console.log('💬 Found existing comment from me, adding to memory and skipping:', postId.substring(0, 20) + '...');
-            this.commentedPosts.add(postId);
+            console.log('💬 Already commented on this post, skipping');
             return;
         }
         
-        const timer = this.viewTimers.get(postId);
-        if (!timer || timer.commentProcessed) return;
-        timer.commentProcessed = true;
+        // בדיקה אם יש תגובה קיימת שלי
+        if (this.hasMyExistingComment(postElement)) {
+            console.log('💬 My comment already exists on this post');
+            this.commentedPosts.add(postId);
+            return;
+        }
 
         try {
-            const postContent = this.extractPostContent(postElement);
-            if (!postContent || postContent.length < 20) {
-                console.log('💬 Post content too short for comment:', postContent.length, 'chars');
+            console.log('💬 Processing auto-comment for post:', postId);
+            
+            // מציאת כפתור התגובה
+            const commentButton = this.findCommentButton(postElement);
+            if (!commentButton) {
+                console.log('Comment button not found');
                 return;
             }
 
-            console.log('💬 Adding post to comment queue:', {
-                postId: postId.substring(0, 20) + '...',
-                author: this.extractPostAuthor(postElement),
-                contentLength: postContent.length
-            });
+            // לחיצה על כפתור התגובה לפתיחת תיבת הטקסט
+            await this.simulateHumanClick(commentButton);
+            await this.sleep(1000);
 
-            this.commentQueue.push({
-                postId, postElement, postContent, timestamp: Date.now()
-            });
-            console.log('💬 Comment queue length:', this.commentQueue.length);
+            // מציאת תיבת הטקסט
+            const commentBox = this.findCommentBox(postElement);
+            if (!commentBox) {
+                console.log('Comment box not found after clicking comment button');
+                return;
+            }
+
+            // יצירת תגובה
+            const postContent = this.extractPostContent(postElement);
+            const author = this.extractPostAuthor(postElement);
+            
+            const commentText = await this.generateComment(postContent, author, this.currentPersonaId);
+            if (!commentText) {
+                console.log('Failed to generate comment');
+                return;
+            }
+
+            console.log('💬 Generated comment:', commentText.substring(0, 50) + '...');
+
+            // הקלדת התגובה
+            await this.typeInCommentBox(commentBox, commentText, postElement);
+            
+            // סימון שהגבנו לפוסט הזה
+            this.commentedPosts.add(postId);
+            
+            // עדכון סטטיסטיקות
+            if (this.sessionData) {
+                this.sessionData.commentsPosted++;
+            }
+            
+            console.log('💬 Auto-comment completed for post:', postId);
+            
         } catch (error) {
-            console.error('Error processing auto-comment:', error);
+            console.error('Error in auto-comment:', error);
+            await this.recordError(error, 'auto-comment', postElement);
         }
     }
 
@@ -1495,17 +1547,16 @@ class SocialBotContentScript {
     }
 
     findVisibleUnprocessedPosts() {
-        const allPosts = this.findPosts();
-        const visibleUnprocessedPosts = [];
-        
-        for (const post of allPosts) {
-            const postId = this.getPostId(post);
-            if (postId && !this.processedPosts.has(postId) && this.isElementVisible(post)) {
-                visibleUnprocessedPosts.push(post);
-            }
+        // בדיקת בטיחות
+        if (!this.processedPosts) {
+            return [];
         }
         
-        return visibleUnprocessedPosts;
+        const posts = this.findPosts();
+        return posts.filter(post => {
+            const postId = this.getPostId(post);
+            return postId && !this.processedPosts.has(postId) && this.isElementVisible(post);
+        });
     }
 
     pauseAutoScrollForPost(postElement, postId) {
