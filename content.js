@@ -1,44 +1,232 @@
-// YUV.AI SocialBot Pro - Content Script
+// 🤖 YUV.AI SocialBot Pro - Content Script
+// ===============================================
+
+// 🔧 Global State Management
+let socialBotInstance = null;
+let isInitialized = false;
+
+// 📊 Global Statistics
+let totalLikes = 0;
+let totalComments = 0;
+let totalPosts = 0;
+let totalScrolls = 0;
+
+// ⚙️ Global Settings
+let settings = {
+    globallyEnabled: true,
+    autoLike: true,
+    autoComment: true,
+    autoScroll: true,
+    scrollSpeed: 2,
+    language: 'he'
+};
+
+// 🚀 Initialize Content Script
+console.log('🚀 YUV.AI SocialBot Pro Content Script Loading...');
+
+// 📨 Single Message Listener - Handles ALL Communication
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    console.log('📨 Content script received message:', request.type);
+    
+    try {
+        switch (request.type) {
+            case 'PING':
+                sendResponse({ 
+                    status: 'ready',
+                    initialized: isInitialized,
+                    instanceExists: !!socialBotInstance 
+                });
+                break;
+                
+            case 'SYNC_SETTINGS':
+                if (request.settings) {
+                    // עדכון הגדרות גלובליות
+                    Object.assign(settings, request.settings);
+                    console.log('✅ Settings synced from popup:', settings);
+                    
+                    // עדכון מופע הבוט אם קיים
+                    if (socialBotInstance) {
+                        socialBotInstance.updateSettings(settings);
+                    }
+                    
+                    // התחלה/עצירה לפי מצב גלובלי
+                    handleGlobalStateChange(settings.globallyEnabled);
+                }
+                sendResponse({ status: 'settings_synced' });
+                break;
+                
+            case 'GET_STATUS':
+                sendResponse({
+                    status: {
+                        initialized: isInitialized,
+                        instanceExists: !!socialBotInstance,
+                        globallyEnabled: settings.globallyEnabled,
+                        currentActivity: getCurrentActivity(),
+                        stats: getStats()
+                    }
+                });
+                break;
+                
+            case 'TOGGLE_GLOBAL_STATE':
+                settings.globallyEnabled = request.enabled;
+                console.log('🔄 Global state toggled:', request.enabled);
+                
+                handleGlobalStateChange(request.enabled);
+                
+                sendResponse({ 
+                    status: request.enabled ? 'bot_started' : 'bot_stopped',
+                    globallyEnabled: settings.globallyEnabled
+                });
+                break;
+                
+            case 'FORCE_REINIT':
+                console.log('🔄 Force reinitializing...');
+                initializeBot();
+                sendResponse({ status: 'reinitialized' });
+                break;
+                
+            default:
+                console.log('❓ Unknown message type:', request.type);
+                sendResponse({ status: 'unknown_message' });
+        }
+    } catch (error) {
+        console.error('❌ Error handling message:', error);
+        sendResponse({ status: 'error', error: error.message });
+    }
+    
+    return true; // Keep message channel open for async response
+});
+
+// 🎯 Global State Handler
+function handleGlobalStateChange(enabled) {
+    if (enabled) {
+        if (!isInitialized) {
+            initializeBot();
+        } else if (socialBotInstance) {
+            socialBotInstance.start();
+        }
+    } else {
+        if (socialBotInstance) {
+            socialBotInstance.stop();
+        }
+    }
+}
+
+// 🚀 Bot Initialization
+function initializeBot() {
+    try {
+        console.log('🔄 Initializing SocialBot...');
+        
+        // יצירת מופע חדש רק אם לא קיים
+        if (!socialBotInstance) {
+            socialBotInstance = new SocialBotContentScript();
+        }
+        
+        isInitialized = true;
+        console.log('✅ SocialBot initialized successfully');
+        
+        // התחלה אוטומטית אם מופעל
+        if (settings.globallyEnabled) {
+            setTimeout(() => {
+                if (socialBotInstance) {
+                    socialBotInstance.start();
+                }
+            }, 2000);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error initializing bot:', error);
+        isInitialized = false;
+    }
+}
+
+// 📊 Status Functions
+function getCurrentActivity() {
+    if (!isInitialized || !socialBotInstance) return 'לא מאותחל';
+    if (!settings.globallyEnabled) return 'מושבת';
+    
+    try {
+        if (socialBotInstance.autoScrollActive) return 'גלילה אוטומטית';
+        if (socialBotInstance.isProcessing) return 'מעבד פוסטים';
+        return 'מחכה לפעילות';
+    } catch (error) {
+        return 'מחכה לפעילות';
+    }
+}
+
+function getStats() {
+    return {
+        totalLikes: totalLikes,
+        totalComments: totalComments,
+        totalPosts: totalPosts,
+        totalScrolls: totalScrolls
+    };
+}
+
+// 🔄 Load Settings on Startup
+chrome.storage.sync.get([
+    'globallyEnabled',
+    'autoLike', 
+    'autoComment',
+    'autoScroll',
+    'scrollSpeed',
+    'language'
+]).then(stored => {
+    settings = {
+        globallyEnabled: stored.globallyEnabled !== false,
+        autoLike: stored.autoLike !== false,
+        autoComment: stored.autoComment !== false,
+        autoScroll: stored.autoScroll !== false,
+        scrollSpeed: stored.scrollSpeed || 2,
+        language: stored.language || 'he'
+    };
+    
+    console.log('✅ Content script settings loaded:', settings);
+    
+    // אתחול הבוט
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeBot);
+    } else {
+        initializeBot();
+    }
+    
+}).catch(error => {
+    console.error('❌ Error loading settings:', error);
+    // אתחול עם הגדרות ברירת מחדל
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeBot);
+    } else {
+        initializeBot();
+    }
+});
+
+// יצירת מחלקה לניהול התוסף
 class SocialBotContentScript {
     constructor() {
-        this.settings = {};
-        this.currentPersonaId = null;
-        this.currentPlatform = this.detectPlatform();
+        console.log('🎯 SocialBotContentScript constructor called');
+        
+        // בדיקה אם כבר קיים מופע
+        if (socialBotInstance && socialBotInstance !== this) {
+            console.log('⚠️ SocialBot instance already exists, returning existing instance');
+            return socialBotInstance;
+        }
+        
+        this.isRunning = false;
+        this.isProcessing = false;
+        this.autoScrollActive = false;
+        this.platform = this.detectPlatform();
+        this.settings = { ...settings }; // Copy global settings
         this.processedPosts = new Set();
-        this.commentedPosts = new Set(); // מעקב אחר פוסטים שכבר הגבתי להם
-        this.viewTimers = new Map();
-        this.scrollTimeout = null;
-        this.isScrolling = false;
-        this.lastScrollTime = 0;
         this.commentQueue = [];
-        this.isProcessingQueue = false;
-        this.observedElements = new WeakSet();
-        this.analyticsDB = null;
-        this.isGloballyEnabled = true; // מתג הפעלה כללי
-        
-        // Auto-scroll functionality
-        this.autoScrollEnabled = false;
-        this.isAutoScrolling = false;
-        this.currentScrollPosition = 0;
-        this.scrollPausedForPost = false;
-        this.waitingForUserAction = false;
-        this.autoScrollSpeed = 1; // 1=slow, 2=medium, 3=fast
-        this.scrollPauseTimeout = null;
-        this.pendingScrollContinue = null;
-        
-        this.sessionData = {
-            startTime: Date.now(),
-            postsViewed: 0,
-            likesGiven: 0,
-            commentsPosted: 0,
-            scrollDistance: 0
-        };
+        this.sessionId = Date.now();
+        this.db = null;
         
         this.init();
+        return this;
     }
 
     async init() {
-        console.log('YUV.AI SocialBot Pro - Content Script initialized on', this.currentPlatform);
+        console.log('YUV.AI SocialBot Pro - Content Script initialized on', this.platform);
         await this.loadSettings();
         await this.initAnalyticsDB();
         this.setupEventListeners();
@@ -62,8 +250,8 @@ class SocialBotContentScript {
                 });
             }
             
-            this.analyticsDB = new window.SocialBotDB();
-            await this.analyticsDB.init();
+            this.db = new window.SocialBotDB();
+            await this.db.init();
             console.log('Analytics DB initialized successfully');
             
         } catch (error) {
@@ -92,17 +280,17 @@ class SocialBotContentScript {
     }
 
     async saveSessionData() {
-        if (!this.analyticsDB) return;
+        if (!this.db) return;
         
         try {
             const sessionData = {
                 ...this.sessionData,
                 endTime: Date.now(),
-                platform: this.currentPlatform,
+                platform: this.platform,
                 url: window.location.href
             };
             
-            await this.analyticsDB.recordSession(sessionData);
+            await this.db.recordSession(sessionData);
         } catch (error) {
             console.error('Failed to save session data:', error);
         }
@@ -149,14 +337,7 @@ class SocialBotContentScript {
     }
 
     setupEventListeners() {
-        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-            const result = this.handleMessage(message);
-            if (result instanceof Promise) {
-                result.then(sendResponse);
-                return true; // Keeps the message channel open for async response
-            }
-            return false;
-        });
+        // Remove duplicate message listener - we have one global listener
         window.addEventListener('scroll', () => this.handleScroll(), { passive: true });
         document.addEventListener('mousemove', () => this.handleMouseMove());
         document.addEventListener('click', (e) => this.handleClick(e), true);
@@ -317,7 +498,7 @@ class SocialBotContentScript {
     }
 
     findPosts() {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             // סלקטורים מדויקים יותר לפוסטים של LinkedIn
             const selectors = [
                 '.feed-shared-update-v2',
@@ -351,7 +532,7 @@ class SocialBotContentScript {
             console.log('🔍 Found', uniquePosts.length, 'valid LinkedIn posts');
             return uniquePosts;
             
-        } else if (this.currentPlatform === 'facebook') {
+        } else if (this.platform === 'facebook') {
             return Array.from(document.querySelectorAll('[data-pagelet*="FeedUnit"], [role="article"]'));
         }
         
@@ -359,9 +540,9 @@ class SocialBotContentScript {
     }
 
     findPostsInElement(element) {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             return element.querySelectorAll('div[data-id^="urn:li:activity:"], .feed-shared-update-v2, .occludable-update');
-        } else if (this.currentPlatform === 'facebook') {
+        } else if (this.platform === 'facebook') {
             return element.querySelectorAll('[data-pagelet="FeedUnit"]');
         }
         return [];
@@ -435,7 +616,7 @@ class SocialBotContentScript {
                 alreadyProcessed: this.processedPosts.has(postId),
                 platformEnabled: this.isPlatformEnabled(),
                 globallyEnabled: this.isGloballyEnabled,
-                currentPlatform: this.currentPlatform,
+                currentPlatform: this.platform,
                 settings: this.settings
             });
             return;
@@ -447,7 +628,7 @@ class SocialBotContentScript {
 
             console.log('📄 New post detected:', {
                 postId: postId.substring(0, 20) + '...',
-                platform: this.currentPlatform,
+                platform: this.platform,
                 autoLikes: this.settings.autoLikes,
                 autoComments: this.settings.autoComments,
                 author: this.extractPostAuthor(postElement)
@@ -477,11 +658,11 @@ class SocialBotContentScript {
     }
 
     async recordViewedPost(postElement) {
-        if (!this.analyticsDB) return;
+        if (!this.db) return;
         
         try {
             const postData = {
-                platform: this.currentPlatform,
+                platform: this.platform,
                 postId: this.getPostId(postElement),
                 author: this.extractPostAuthor(postElement),
                 content: this.extractPostContent(postElement),
@@ -489,7 +670,7 @@ class SocialBotContentScript {
                 authorProfile: this.extractAuthorProfile(postElement)
             };
 
-            await this.analyticsDB.recordViewedPost(postData);
+            await this.db.recordViewedPost(postData);
         } catch (error) {
             console.error('Failed to record viewed post:', error);
         }
@@ -503,12 +684,12 @@ class SocialBotContentScript {
     }
 
     getPostId(postElement) {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             const dataId = postElement.getAttribute('data-id');
             if (dataId) return dataId;
             const activityId = postElement.querySelector('[data-id^="urn:li:activity:"]');
-            if (activityId) return activityId.getAttribute('data-id');
-        } else if (this.currentPlatform === 'facebook') {
+            if (activityId) return activityId.getAttribute('data-data-id');
+        } else if (this.platform === 'facebook') {
             const feedUnit = postElement.getAttribute('data-pagelet');
             if (feedUnit) return feedUnit + '_' + Date.now();
         }
@@ -517,8 +698,8 @@ class SocialBotContentScript {
     }
 
     isPlatformEnabled() {
-        if (this.currentPlatform === 'linkedin') return this.settings.linkedinEnabled;
-        if (this.currentPlatform === 'facebook') return this.settings.facebookEnabled;
+        if (this.platform === 'linkedin') return this.settings.linkedinEnabled;
+        if (this.platform === 'facebook') return this.settings.facebookEnabled;
         return false;
     }
 
@@ -558,7 +739,7 @@ class SocialBotContentScript {
             await this.sleep(500 + Math.random() * 1000);
             
             // בדיקה אם להשתמש בלב אהבה
-            if (this.settings.preferHeartReaction && this.currentPlatform === 'linkedin') {
+            if (this.settings.preferHeartReaction && this.platform === 'linkedin') {
                 const heartSuccess = await this.tryHeartReaction(likeButton, postElement);
                 if (heartSuccess) {
                     this.sessionData.likesGiven++;
@@ -650,14 +831,14 @@ class SocialBotContentScript {
     }
 
     async recordLike(postElement, reactionType = 'like') {
-        if (!this.analyticsDB) {
+        if (!this.db) {
             console.error('Analytics DB not initialized');
             return;
         }
         
         try {
             const postData = {
-                platform: this.currentPlatform,
+                platform: this.platform,
                 postId: this.getPostId(postElement),
                 author: this.extractPostAuthor(postElement),
                 content: this.extractPostContent(postElement),
@@ -676,7 +857,7 @@ class SocialBotContentScript {
                 likesCount: postData.likesCount
             });
 
-            const result = await this.analyticsDB.recordLike(postData);
+            const result = await this.db.recordLike(postData);
             console.log('Like recorded successfully:', result);
             
             // עדכון הפיד הזמן-אמת
@@ -799,7 +980,7 @@ class SocialBotContentScript {
     }
 
     findSubmitButton(commentBox) {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             // חיפוש כפתור שליחה בקרבת תיבת התגובה
             const parentContainer = commentBox.closest('.comments-comment-box, .comments-comment-texteditor, .comment-form');
             if (parentContainer) {
@@ -908,10 +1089,10 @@ class SocialBotContentScript {
     }
 
     extractPostContent(postElement) {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             const content = postElement.querySelector('.feed-shared-text, .feed-shared-update-v2__description');
             return content ? content.textContent.trim() : '';
-        } else if (this.currentPlatform === 'facebook') {
+        } else if (this.platform === 'facebook') {
             const content = postElement.querySelector('[data-testid="post_message"]');
             return content ? content.textContent.trim() : '';
         }
@@ -999,10 +1180,10 @@ class SocialBotContentScript {
 
     // Helper methods for analytics data extraction
     extractPostAuthor(postElement) {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             const authorElement = postElement.querySelector('.feed-shared-actor__name, .update-components-actor__name, .feed-shared-actor__title');
             return authorElement ? authorElement.textContent.trim() : 'Unknown Author';
-        } else if (this.currentPlatform === 'facebook') {
+        } else if (this.platform === 'facebook') {
             const authorElement = postElement.querySelector('[data-testid="post_author_name"], strong');
             return authorElement ? authorElement.textContent.trim() : 'Unknown Author';
         }
@@ -1010,10 +1191,10 @@ class SocialBotContentScript {
     }
 
     extractAuthorProfile(postElement) {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             const profileLink = postElement.querySelector('.feed-shared-actor__container-link, .update-components-actor__container a');
             return profileLink ? profileLink.href : '';
-        } else if (this.currentPlatform === 'facebook') {
+        } else if (this.platform === 'facebook') {
             const profileLink = postElement.querySelector('a[role="link"]');
             return profileLink ? profileLink.href : '';
         }
@@ -1021,14 +1202,14 @@ class SocialBotContentScript {
     }
 
     extractLikesCount(postElement) {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             const likesElement = postElement.querySelector('.social-counts-reactions__count, .social-counts__reactions-count');
             if (likesElement) {
                 const text = likesElement.textContent.trim();
                 const match = text.match(/(\d+)/);
                 return match ? parseInt(match[1]) : 0;
             }
-        } else if (this.currentPlatform === 'facebook') {
+        } else if (this.platform === 'facebook') {
             const likesElement = postElement.querySelector('[data-testid="like_count"]');
             if (likesElement) {
                 const text = likesElement.textContent.trim();
@@ -1040,14 +1221,14 @@ class SocialBotContentScript {
     }
 
     extractCommentsCount(postElement) {
-        if (this.currentPlatform === 'linkedin') {
+        if (this.platform === 'linkedin') {
             const commentsElement = postElement.querySelector('.social-counts__comments, .social-counts-comments');
             if (commentsElement) {
                 const text = commentsElement.textContent.trim();
                 const match = text.match(/(\d+)/);
                 return match ? parseInt(match[1]) : 0;
             }
-        } else if (this.currentPlatform === 'facebook') {
+        } else if (this.platform === 'facebook') {
             const commentsElement = postElement.querySelector('[data-testid="comments_count"]');
             if (commentsElement) {
                 const text = commentsElement.textContent.trim();
@@ -1059,14 +1240,14 @@ class SocialBotContentScript {
     }
 
     async recordError(error, context, postElement = null) {
-        if (!this.analyticsDB) return;
+        if (!this.db) return;
         
         try {
             const errorData = {
                 type: error.name || 'UnknownError',
                 message: error.message || 'Unknown error',
                 stack: error.stack || '',
-                platform: this.currentPlatform,
+                platform: this.platform,
                 url: window.location.href,
                 context: context
             };
@@ -1076,7 +1257,7 @@ class SocialBotContentScript {
                 errorData.postAuthor = this.extractPostAuthor(postElement);
             }
 
-            await this.analyticsDB.recordError(errorData);
+            await this.db.recordError(errorData);
         } catch (recordError) {
             console.error('Failed to record error:', recordError);
         }
@@ -1434,13 +1615,52 @@ class SocialBotContentScript {
             </div>
         `;
     }
-}
 
-// Initialize content script - create only one instance
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        new SocialBotContentScript();
-    });
-} else {
-    new SocialBotContentScript();
+    // 🚀 Start Bot
+    start() {
+        if (this.isRunning) return;
+        
+        console.log('🚀 Starting SocialBot Pro...');
+        this.isRunning = true;
+        
+        // התחלת הפעילות לפי הגדרות
+        if (this.settings.autoScroll) {
+            this.startAutoScroll();
+        }
+        
+        console.log('✅ SocialBot Pro started successfully');
+    }
+
+    // 🛑 Stop Bot
+    stop() {
+        if (!this.isRunning) return;
+        
+        console.log('🛑 Stopping SocialBot Pro...');
+        this.isRunning = false;
+        this.autoScrollActive = false;
+        
+        // עצירת כל הפעילויות
+        this.stopAutoScroll();
+        
+        // ניקוי תורים
+        this.commentQueue = [];
+        this.processedPosts.clear();
+        
+        console.log('✅ SocialBot Pro stopped successfully');
+    }
+
+    // ⚙️ Update Settings
+    updateSettings(newSettings) {
+        this.settings = { ...this.settings, ...newSettings };
+        console.log('⚙️ Settings updated:', this.settings);
+        
+        // עדכון פעילות בהתאם להגדרות
+        if (this.isRunning) {
+            if (this.settings.autoScroll && !this.autoScrollActive) {
+                this.startAutoScroll();
+            } else if (!this.settings.autoScroll && this.autoScrollActive) {
+                this.stopAutoScroll();
+            }
+        }
+    }
 } 

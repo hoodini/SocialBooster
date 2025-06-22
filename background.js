@@ -27,6 +27,21 @@ class SocialBotBackground {
                 this.injectContentScript(tabId);
             }
         });
+
+        // Handle tab activation - ensure content script is loaded when user switches to social media tab
+        chrome.tabs.onActivated.addListener(async (activeInfo) => {
+            try {
+                const tab = await chrome.tabs.get(activeInfo.tabId);
+                if (this.isSupportedSite(tab.url)) {
+                    // Wait a bit for tab to be ready
+                    setTimeout(() => {
+                        this.ensureContentScriptLoaded(activeInfo.tabId);
+                    }, 1000);
+                }
+            } catch (error) {
+                console.log('Could not handle tab activation:', error);
+            }
+        });
     }
 
     async handleInstallation(details) {
@@ -425,6 +440,21 @@ Comment:`;
             });
         } catch (error) {
             console.log('Could not broadcast to tabs:', error);
+        }
+    }
+
+    async ensureContentScriptLoaded(tabId) {
+        try {
+            // Try to ping the content script
+            const response = await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+            if (response && response.status === 'ready') {
+                console.log('Content script already loaded in tab:', tabId);
+                return;
+            }
+        } catch (error) {
+            // Content script not loaded, inject it
+            console.log('Injecting content script into activated tab:', tabId);
+            await this.injectContentScript(tabId);
         }
     }
 }

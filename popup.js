@@ -1,19 +1,238 @@
+// Global popup instance
+let popupInstance = null;
+
 // YUV.AI SocialBot Pro - Popup Logic
 class SocialBotPopup {
     constructor() {
-        this.currentPersonas = [];
-        this.currentPersonaId = null;
-        this.exampleCount = 1;
+        // Singleton pattern - prevent multiple instances
+        if (popupInstance) {
+            return popupInstance;
+        }
+        
+        this.settings = {};
+        this.apiKey = '';
+        this.isInitialized = false;
         this.languageManager = new LanguageManager();
-        this.init();
+        this.statusMonitoringInterval = null;
+        this.lastSuccessfulConnection = null;
+        
+        popupInstance = this;
+        return this;
     }
 
     async init() {
-        await this.loadStoredData();
-        this.setupEventListeners();
-        this.updateUI();
-        this.startStatsUpdater();
-        this.languageManager.updateTranslations();
+        // Prevent multiple initializations
+        if (this.isInitialized) {
+            console.log('🔄 Popup already initialized, refreshing...');
+            await this.refreshData();
+            return;
+        }
+        
+        console.log('🚀 SocialBot Pro initializing...');
+        
+        try {
+            // בדיקה אם יש טאב פעיל מתאים
+            const activeTab = await this.getActiveTab();
+            if (!activeTab) {
+                this.showStatus('פתח דף LinkedIn או Facebook כדי להתחיל', 'info');
+                return;
+            }
+            
+            // טעינת הגדרות
+            await this.loadSettings();
+            console.log('✅ Settings loaded');
+            
+            // אתחול UI
+            this.setupEventListeners();
+            this.updateUI();
+            console.log('✅ UI initialized');
+            
+            // חיבור לטאב הפעיל
+            await this.connectToActiveTab();
+            
+            // התחלת ניטור סטטוס
+            this.startStatusMonitoring();
+            
+            this.isInitialized = true;
+            console.log('🎉 SocialBot Pro initialized successfully');
+            
+        } catch (error) {
+            console.error('❌ Error during initialization:', error);
+            this.showStatus('שגיאה באתחול התוסף - נסה לרענן', 'error');
+        }
+    }
+
+    async refreshData() {
+        try {
+            // טעינת הגדרות מחדש
+            await this.loadSettings();
+            
+            // עדכון UI
+            this.updateUI();
+            
+            // חיבור מחדש לטאב
+            await this.connectToActiveTab();
+            
+            console.log('🔄 Popup data refreshed');
+            
+        } catch (error) {
+            console.error('❌ Error refreshing popup data:', error);
+            this.showStatus('שגיאה ברענון נתונים', 'error');
+        }
+    }
+
+    async connectToActiveTab() {
+        try {
+            const activeTab = await this.getActiveTab();
+            if (!activeTab) return;
+            
+            console.log('🔗 Connecting to active tab:', activeTab.id);
+            
+            // ניסיון חיבור לטאב
+            const response = await chrome.tabs.sendMessage(activeTab.id, {
+                type: 'PING'
+            });
+            
+            if (response && response.status === 'ready') {
+                console.log('✅ Connected to content script');
+                this.showStatus('מחובר ומוכן לפעולה', 'success');
+                
+                // שליחת הגדרות נוכחיות
+                await this.syncSettingsToTab(activeTab.id);
+                
+            } else {
+                throw new Error('Content script not ready');
+            }
+            
+        } catch (error) {
+            console.log('ℹ️ Content script not loaded, attempting injection...');
+            await this.injectContentScript();
+        }
+    }
+
+    async injectContentScript() {
+        try {
+            const activeTab = await this.getActiveTab();
+            if (!activeTab) return;
+            
+            console.log('💉 Injecting content script...');
+            
+            // הזרקת content script
+            await chrome.scripting.executeScript({
+                target: { tabId: activeTab.id },
+                files: ['content.js']
+            });
+            
+            // המתנה לטעינה
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // ניסיון חיבור
+            const response = await chrome.tabs.sendMessage(activeTab.id, {
+                type: 'PING'
+            });
+            
+            if (response && response.status === 'ready') {
+                console.log('✅ Content script injected and connected');
+                await this.syncSettingsToTab(activeTab.id);
+                this.showStatus('תוסף הוזרק ומחובר', 'success');
+            } else {
+                // אם עדיין לא עובד, נאלץ content script להתאתחל
+                await chrome.tabs.sendMessage(activeTab.id, {
+                    type: 'FORCE_REINIT'
+                });
+                console.log('🔄 Forced content script reinitialization');
+            }
+            
+        } catch (error) {
+            console.error('❌ Failed to inject content script:', error);
+            this.showStatus('לא ניתן להתחבר - רענן את הדף', 'error');
+        }
+    }
+
+    async syncSettingsToTab(tabId) {
+        try {
+            await chrome.tabs.sendMessage(tabId, {
+                type: 'SYNC_SETTINGS',
+                settings: {
+                    globallyEnabled: this.settings.globallyEnabled,
+                    autoLike: this.settings.autoLike,
+                    autoComment: this.settings.autoComment,
+                    autoScroll: this.settings.autoScroll,
+                    scrollSpeed: this.settings.scrollSpeed,
+                    language: this.settings.language
+                }
+            });
+            console.log('✅ Settings synced to tab');
+        } catch (error) {
+            console.warn('Warning syncing settings:', error);
+        }
+    }
+
+    startStatusMonitoring() {
+        // ניטור סטטוס מתקדם כל 3 שניות
+        if (this.statusMonitoringInterval) {
+            clearInterval(this.statusMonitoringInterval);
+        }
+        
+        this.statusMonitoringInterval = setInterval(async () => {
+            try {
+                const activeTab = await this.getActiveTab();
+                if (!activeTab) {
+                    this.showStatus('פתח דף LinkedIn או Facebook', 'info');
+                    return;
+                }
+                
+                // ניסיון קבלת סטטוס
+                const response = await chrome.tabs.sendMessage(activeTab.id, {
+                    type: 'GET_STATUS'
+                });
+                
+                if (response && response.status) {
+                    this.updateStatusDisplay(response.status);
+                    this.lastSuccessfulConnection = Date.now();
+                } else {
+                    throw new Error('No valid response from content script');
+                }
+                
+            } catch (error) {
+                console.log('📡 Connection lost, attempting recovery...');
+                await this.attemptConnectionRecovery();
+            }
+        }, 3000);
+        
+        console.log('📊 Status monitoring started');
+    }
+
+    async attemptConnectionRecovery() {
+        try {
+            const activeTab = await this.getActiveTab();
+            if (!activeTab) return;
+            
+            console.log('🔄 Attempting connection recovery...');
+            
+            // ניסיון PING
+            try {
+                const pingResponse = await chrome.tabs.sendMessage(activeTab.id, {
+                    type: 'PING'
+                });
+                
+                if (pingResponse && pingResponse.status === 'ready') {
+                    console.log('✅ Connection recovered via PING');
+                    await this.syncSettingsToTab(activeTab.id);
+                    this.showStatus('חיבור מחדש הצליח', 'success');
+                    return;
+                }
+            } catch (pingError) {
+                console.log('📡 PING failed, trying content script injection...');
+            }
+            
+            // אם PING נכשל, ננסה להזריק content script
+            await this.injectContentScript();
+            
+        } catch (error) {
+            console.error('❌ Connection recovery failed:', error);
+            this.showStatus('חיבור נותק - רענן את הדף', 'error');
+        }
     }
 
     async loadStoredData() {
@@ -77,66 +296,73 @@ class SocialBotPopup {
     }
 
     setupEventListeners() {
-        // API Key
-        document.getElementById('saveApiKey').addEventListener('click', () => this.saveApiKey());
-        document.getElementById('apiKey').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.saveApiKey();
-        });
+        try {
+            // API Key
+            document.getElementById('saveApiKey').addEventListener('click', () => this.saveApiKey());
+            document.getElementById('apiKey').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') this.saveApiKey();
+            });
 
-        // Personas
-        document.getElementById('addPersona').addEventListener('click', () => this.showPersonaForm());
-        document.getElementById('editPersona').addEventListener('click', () => this.editSelectedPersona());
-        document.getElementById('deletePersona').addEventListener('click', () => this.deleteSelectedPersona());
-        document.getElementById('personaSelect').addEventListener('change', (e) => this.selectPersona(e.target.value));
+            // Personas
+            document.getElementById('addPersona').addEventListener('click', () => this.showPersonaForm());
+            document.getElementById('editPersona').addEventListener('click', () => this.editSelectedPersona());
+            document.getElementById('deletePersona').addEventListener('click', () => this.deleteSelectedPersona());
+            document.getElementById('personaSelect').addEventListener('change', (e) => this.selectPersona(e.target.value));
 
-        // Persona Form
-        document.getElementById('savePersona').addEventListener('click', () => this.savePersona());
-        document.getElementById('cancelPersona').addEventListener('click', () => this.hidePersonaForm());
-        document.getElementById('addExample').addEventListener('click', () => this.addExample());
+            // Persona Form
+            document.getElementById('savePersona').addEventListener('click', () => this.savePersona());
+            document.getElementById('cancelPersona').addEventListener('click', () => this.hidePersonaForm());
+            document.getElementById('addExample').addEventListener('click', () => this.addExample());
 
-        // Automation Settings
-        document.getElementById('autoLikes').addEventListener('change', () => this.saveAutomationSettings());
-        document.getElementById('autoComments').addEventListener('change', () => this.saveAutomationSettings());
-        document.getElementById('preferHeartReaction').addEventListener('change', () => this.saveAutomationSettings());
-        document.getElementById('linkedinEnabled').addEventListener('change', () => this.saveAutomationSettings());
-        document.getElementById('facebookEnabled').addEventListener('change', () => this.saveAutomationSettings());
+            // Automation Settings
+            document.getElementById('autoLikes').addEventListener('change', () => this.saveAutomationSettings());
+            document.getElementById('autoComments').addEventListener('change', () => this.saveAutomationSettings());
+            document.getElementById('preferHeartReaction').addEventListener('change', () => this.saveAutomationSettings());
+            document.getElementById('linkedinEnabled').addEventListener('change', () => this.saveAutomationSettings());
+            document.getElementById('facebookEnabled').addEventListener('change', () => this.saveAutomationSettings());
 
-        // Dashboard
-        document.getElementById('dashboardBtn').addEventListener('click', () => this.openDashboard());
+            // Dashboard
+            document.getElementById('dashboardBtn').addEventListener('click', () => this.openDashboard());
 
-        // Save automation settings button
-        document.getElementById('saveAutomationBtn').addEventListener('click', () => {
-            this.saveAutomationSettingsManually();
-        });
+            // Save automation settings button
+            document.getElementById('saveAutomationBtn').addEventListener('click', () => {
+                this.saveAutomationSettingsManually();
+            });
 
-        // Language switcher
-        document.getElementById('langHe').addEventListener('click', () => this.switchLanguage('he'));
-        document.getElementById('langEn').addEventListener('click', () => this.switchLanguage('en'));
+            // Language switcher
+            document.getElementById('langHe').addEventListener('click', () => this.switchLanguage('he'));
+            document.getElementById('langEn').addEventListener('click', () => this.switchLanguage('en'));
 
-        // Global toggle
-        document.getElementById('globalToggle').addEventListener('change', (e) => {
-            this.toggleGlobalState(e.target.checked);
-        });
+            // Global toggle
+            document.getElementById('globalToggle').addEventListener('change', (e) => {
+                this.toggleGlobalState(e.target.checked);
+            });
 
-        // Auto-scroll controls
-        document.getElementById('autoScrollEnabled').addEventListener('change', (e) => {
-            this.updateAutoScrollUI(e.target.checked);
-            this.saveAutoScrollSettings();
-        });
-
-        document.querySelectorAll('input[name="scrollSpeed"]').forEach(radio => {
-            radio.addEventListener('change', () => {
+            // Auto-scroll controls
+            document.getElementById('autoScrollEnabled').addEventListener('change', (e) => {
+                this.updateAutoScrollUI(e.target.checked);
                 this.saveAutoScrollSettings();
             });
-        });
 
-        document.getElementById('startAutoScroll').addEventListener('click', () => {
-            this.startAutoScroll();
-        });
+            document.querySelectorAll('input[name="scrollSpeed"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    this.saveAutoScrollSettings();
+                });
+            });
 
-        document.getElementById('stopAutoScroll').addEventListener('click', () => {
-            this.stopAutoScroll();
-        });
+            document.getElementById('startAutoScroll').addEventListener('click', () => {
+                this.startAutoScroll();
+            });
+
+            document.getElementById('stopAutoScroll').addEventListener('click', () => {
+                this.stopAutoScroll();
+            });
+
+            console.log('✅ Event listeners setup complete');
+            
+        } catch (error) {
+            console.error('❌ Error setting up event listeners:', error);
+        }
     }
 
     async saveApiKey() {
@@ -502,8 +728,36 @@ class SocialBotPopup {
     }
 
     updateUI() {
-        // Any additional UI updates
-        console.log('YUV.AI SocialBot Pro initialized');
+        try {
+            // עדכון toggles לפי הגדרות
+            const elements = {
+                'globalToggle': this.settings.globallyEnabled,
+                'autoLike': this.settings.autoLike,
+                'autoComment': this.settings.autoComment,
+                'autoScroll': this.settings.autoScroll
+            };
+            
+            Object.entries(elements).forEach(([id, checked]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.checked = checked;
+                }
+            });
+            
+            // עדכון scroll speed
+            const scrollSpeedSlider = document.getElementById('scrollSpeed');
+            if (scrollSpeedSlider) {
+                scrollSpeedSlider.value = this.settings.scrollSpeed;
+            }
+            
+            // עדכון global toggle UI
+            this.updateGlobalToggleUI(this.settings.globallyEnabled);
+            
+            console.log('✅ UI updated');
+            
+        } catch (error) {
+            console.error('❌ Error updating UI:', error);
+        }
     }
 
     openDashboard() {
@@ -556,26 +810,41 @@ class SocialBotPopup {
 
     async toggleGlobalState(enabled) {
         try {
+            console.log('🔄 Toggling global state to:', enabled);
+            
             // שמירה ב-storage
             await chrome.storage.sync.set({ globallyEnabled: enabled });
+            console.log('✅ Global state saved to storage');
             
             // עדכון ה-UI
             this.updateGlobalToggleUI(enabled);
             
             // שליחת הודעה לכל הטאבים הפעילים
-            const tabs = await chrome.tabs.query({});
-            for (const tab of tabs) {
-                if (tab.url && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
-                    try {
-                        await chrome.tabs.sendMessage(tab.id, {
-                            type: 'TOGGLE_GLOBAL_STATE',
-                            enabled: enabled
-                        });
-                    } catch (error) {
-                        // Tab might not have content script loaded
-                        console.log('Could not send message to tab:', tab.id);
+            try {
+                const tabs = await chrome.tabs.query({});
+                let successCount = 0;
+                
+                for (const tab of tabs) {
+                    if (tab.url && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
+                        try {
+                            await chrome.tabs.sendMessage(tab.id, {
+                                type: 'TOGGLE_GLOBAL_STATE',
+                                enabled: enabled
+                            });
+                            successCount++;
+                            console.log(`✅ Message sent to tab ${tab.id}`);
+                        } catch (tabError) {
+                            console.log(`ℹ️ Could not send message to tab ${tab.id}:`, tabError.message);
+                            // זה נורמלי - לא כל הטאבים יש בהם content script
+                        }
                     }
                 }
+                
+                console.log(`📤 Sent global toggle message to ${successCount} tabs`);
+                
+            } catch (tabsError) {
+                console.warn('Warning getting tabs:', tabsError);
+                // לא חשוב מספיק כדי להכשיל את כל הפעולה
             }
             
             // הודעת סטטוס
@@ -585,11 +854,23 @@ class SocialBotPopup {
             
             this.showStatus(statusMessage, enabled ? 'success' : 'warning');
             
-            console.log('🔄 Global state changed:', enabled ? 'ENABLED' : 'DISABLED');
+            console.log('🔄 Global state change completed successfully');
             
         } catch (error) {
-            console.error('Error toggling global state:', error);
-            this.showStatus('שגיאה בשינוי מצב התוסף', 'error');
+            console.error('❌ Error in toggleGlobalState:', error);
+            
+            // ניסיון לזהות את סוג השגיאה
+            if (error.message && error.message.includes('storage')) {
+                this.showStatus('שגיאה בשמירת הגדרות - נסה שוב', 'error');
+            } else if (error.message && error.message.includes('tabs')) {
+                this.showStatus('שגיאה בתקשורת עם טאבים - התוסף עדיין יעבוד', 'warning');
+            } else {
+                this.showStatus('שגיאה כללית - נסה לרענן את הדף', 'error');
+            }
+            
+            // החזר את המתג למצב הקודם
+            document.getElementById('globalToggle').checked = !enabled;
+            this.updateGlobalToggleUI(!enabled);
         }
     }
 
@@ -693,11 +974,153 @@ class SocialBotPopup {
             this.showStatus('שגיאה בעצירת גלילה אוטומטית', 'error');
         }
     }
+
+    async getActiveTab() {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
+            return tab;
+        }
+        return null;
+    }
+
+    async loadSettings() {
+        try {
+            const stored = await chrome.storage.sync.get([
+                'globallyEnabled',
+                'autoLike', 
+                'autoComment',
+                'autoScroll',
+                'scrollSpeed',
+                'language'
+            ]);
+            
+            this.settings = {
+                globallyEnabled: stored.globallyEnabled !== false, // ברירת מחדל: מופעל
+                autoLike: stored.autoLike !== false,
+                autoComment: stored.autoComment !== false,
+                autoScroll: stored.autoScroll !== false,
+                scrollSpeed: stored.scrollSpeed || 2,
+                language: stored.language || 'he'
+            };
+            
+            console.log('📋 Settings loaded:', this.settings);
+            
+        } catch (error) {
+            console.error('❌ Error loading settings:', error);
+            // הגדרות ברירת מחדל
+            this.settings = {
+                globallyEnabled: true,
+                autoLike: true,
+                autoComment: true,
+                autoScroll: true,
+                scrollSpeed: 2,
+                language: 'he'
+            };
+        }
+    }
+
+    updateStatusDisplay(status) {
+        try {
+            const statusElement = document.getElementById('status');
+            if (!statusElement) return;
+            
+            let statusText = '';
+            let statusClass = '';
+            
+            if (status.isRunning && status.globallyEnabled) {
+                statusText = `🟢 פעיל - ${status.currentActivity}`;
+                statusClass = 'success';
+            } else if (status.globallyEnabled) {
+                statusText = '🟡 מופעל אך לא פעיל';
+                statusClass = 'warning';
+            } else {
+                statusText = '🔴 מושבת';
+                statusClass = 'error';
+            }
+            
+            statusElement.textContent = statusText;
+            statusElement.className = `status ${statusClass}`;
+            
+            // עדכון סטטיסטיקות אם קיימות
+            if (status.stats) {
+                this.updateStats(status.stats);
+            }
+            
+        } catch (error) {
+            console.error('Error updating status display:', error);
+        }
+    }
+
+    updateStats(stats) {
+        try {
+            const elements = {
+                'total-likes': stats.totalLikes || 0,
+                'total-comments': stats.totalComments || 0,
+                'total-posts': stats.totalPosts || 0,
+                'total-scrolls': stats.totalScrolls || 0
+            };
+            
+            Object.entries(elements).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                }
+            });
+            
+        } catch (error) {
+            console.error('Error updating stats:', error);
+        }
+    }
+
+    async updateSetting(key, value) {
+        try {
+            this.settings[key] = value;
+            await chrome.storage.sync.set({ [key]: value });
+            
+            // שליחה לטאב פעיל
+            const activeTab = await this.getActiveTab();
+            if (activeTab) {
+                await this.syncSettingsToTab(activeTab.id);
+            }
+            
+            console.log(`✅ Setting updated: ${key} = ${value}`);
+            
+        } catch (error) {
+            console.error(`❌ Error updating setting ${key}:`, error);
+        }
+    }
 }
 
-// Initialize popup when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new SocialBotPopup();
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', async () => {
+    const popup = new SocialBotPopup();
+    await popup.init();
+});
+
+// Reinitialize when popup window gains focus (user reopens it)
+window.addEventListener('focus', async () => {
+    console.log('🔄 Popup window focused - refreshing...');
+    try {
+        if (popupInstance) {
+            await popupInstance.refreshData();
+        } else {
+            const popup = new SocialBotPopup();
+            await popup.init();
+        }
+    } catch (error) {
+        console.error('❌ Error handling popup focus:', error);
+    }
+});
+
+// Handle popup close/hide
+window.addEventListener('beforeunload', () => {
+    console.log('👋 Popup closing...');
+    
+    // ניקוי intervals
+    if (popupInstance && popupInstance.statusMonitoringInterval) {
+        clearInterval(popupInstance.statusMonitoringInterval);
+        popupInstance.statusMonitoringInterval = null;
+    }
 });
 
 // Add CSS animation for status messages
