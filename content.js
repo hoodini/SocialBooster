@@ -318,10 +318,43 @@ class SocialBotContentScript {
 
     findPosts() {
         if (this.currentPlatform === 'linkedin') {
-            return document.querySelectorAll('div[data-id^="urn:li:activity:"], .feed-shared-update-v2, .occludable-update');
+            // סלקטורים מדויקים יותר לפוסטים של LinkedIn
+            const selectors = [
+                '.feed-shared-update-v2',
+                '[data-id*="urn:li:activity:"]',
+                '.occludable-update',
+                '.feed-shared-update'
+            ];
+            
+            let posts = [];
+            for (const selector of selectors) {
+                const foundPosts = Array.from(document.querySelectorAll(selector));
+                // סינון כדי לוודא שזה באמת פוסט ולא אלמנט אחר
+                const validPosts = foundPosts.filter(post => {
+                    // בדיקה שיש תוכן פוסט
+                    const hasContent = post.querySelector('.feed-shared-text, .feed-shared-inline-show-more-text, [data-test-id="main-feed-activity-card"]');
+                    // בדיקה שיש כפתורי פעולה
+                    const hasActions = post.querySelector('[aria-label*="Like"], [aria-label*="Comment"], .social-actions-button');
+                    // בדיקה שזה לא פוסט מקונן
+                    const isMainPost = !post.closest('.comments-comments-list');
+                    
+                    return hasContent && hasActions && isMainPost;
+                });
+                posts = posts.concat(validPosts);
+            }
+            
+            // הסרת כפילויות
+            const uniquePosts = posts.filter((post, index, self) => 
+                index === self.findIndex(p => this.getPostId(p) === this.getPostId(post))
+            );
+            
+            console.log('🔍 Found', uniquePosts.length, 'valid LinkedIn posts');
+            return uniquePosts;
+            
         } else if (this.currentPlatform === 'facebook') {
-            return document.querySelectorAll('[data-pagelet="FeedUnit"]');
+            return Array.from(document.querySelectorAll('[data-pagelet*="FeedUnit"], [role="article"]'));
         }
+        
         return [];
     }
 
@@ -344,10 +377,47 @@ class SocialBotContentScript {
     }
 
     isElementVisible(element) {
+        if (!element) return false;
+        
         const rect = element.getBoundingClientRect();
         const viewHeight = window.innerHeight;
         const viewWidth = window.innerWidth;
-        return (rect.top >= 0 && rect.left >= 0 && rect.bottom <= viewHeight && rect.right <= viewWidth && rect.height > 100);
+        
+        // בדיקה שהאלמנט נמצא בתחום הנראה
+        const isInViewport = (
+            rect.top >= -100 && // מעט מעל המסך
+            rect.left >= 0 && 
+            rect.bottom <= viewHeight + 100 && // מעט מתחת למסך
+            rect.right <= viewWidth && 
+            rect.height > 50 && // גובה מינימלי
+            rect.width > 100 // רוחב מינימלי
+        );
+        
+        // בדיקה נוספת שהאלמנט אכן גלוי
+        const computedStyle = window.getComputedStyle(element);
+        const isVisible = (
+            computedStyle.display !== 'none' &&
+            computedStyle.visibility !== 'hidden' &&
+            computedStyle.opacity !== '0'
+        );
+        
+        // בדיקה מיוחדת לפוסטים של LinkedIn
+        const isLinkedInPost = element.querySelector('[data-id*="urn:li:activity:"]') || 
+                               element.closest('[data-id*="urn:li:activity:"]') ||
+                               element.classList.contains('feed-shared-update-v2') ||
+                               element.querySelector('.feed-shared-update-v2');
+        
+        const result = isInViewport && isVisible;
+        
+        if (result && isLinkedInPost) {
+            console.log('👀 LinkedIn post is visible:', {
+                postId: this.getPostId(element).substring(0, 20) + '...',
+                rect: { top: rect.top, bottom: rect.bottom, height: rect.height },
+                viewport: { height: viewHeight }
+            });
+        }
+        
+        return result;
     }
 
     async handlePostVisible(postElement) {
@@ -401,7 +471,7 @@ class SocialBotContentScript {
             
             // אם גלילה אוטומטית מופעלת, עצור את הגלילה עבור הפוסט הזה
             if (this.autoScrollEnabled && this.isAutoScrolling) {
-                this.pauseAutoScrollForPost(postElement);
+                this.pauseAutoScrollForPost(postElement, postId);
             }
         }
     }
@@ -1120,6 +1190,9 @@ class SocialBotContentScript {
         
         this.isAutoScrolling = true;
         this.currentScrollPosition = window.scrollY;
+        this.scrollPausedForPost = false;
+        this.waitingForUserAction = false;
+        
         console.log('📜 🚀 Starting auto-scroll with speed:', this.autoScrollSpeed);
         
         // הוספת אינדיקטור ויזואלי
@@ -1159,8 +1232,17 @@ class SocialBotContentScript {
             return;
         }
         
+        // בדיקה אם יש פוסטים גלויים שטרם עובדו
+        const visiblePosts = this.findVisibleUnprocessedPosts();
+        if (visiblePosts.length > 0) {
+            console.log('📜 Found', visiblePosts.length, 'unprocessed posts, pausing scroll...');
+            // עצור גלילה ותן זמן לעיבוד הפוסטים
+            setTimeout(() => this.performAutoScroll(), 3000);
+            return;
+        }
+        
         // חישוב מהירות גלילה בהתאם להגדרה
-        const baseSpeed = 2; // פיקסלים בסיסיים
+        const baseSpeed = 3; // פיקסלים בסיסיים (הגדלתי מ-2)
         const scrollAmount = baseSpeed * this.autoScrollSpeed;
         
         // גלילה עם וריאציה אקראית לתחושה אנושית
@@ -1175,14 +1257,15 @@ class SocialBotContentScript {
         });
         
         // בדיקה אם הגענו לסוף הדף
-        if (this.currentScrollPosition >= document.body.scrollHeight - window.innerHeight - 100) {
+        if (this.currentScrollPosition >= document.body.scrollHeight - window.innerHeight - 200) {
             console.log('📜 Reached end of page, pausing auto-scroll');
             setTimeout(() => {
                 if (this.isAutoScrolling) {
-                    this.currentScrollPosition = document.body.scrollHeight - window.innerHeight;
+                    // נסה לטעון עוד תוכן או המשך
+                    this.currentScrollPosition = document.body.scrollHeight - window.innerHeight - 100;
                     this.performAutoScroll();
                 }
-            }, 3000);
+            }, 5000);
             return;
         }
         
@@ -1191,80 +1274,53 @@ class SocialBotContentScript {
         setTimeout(() => this.performAutoScroll(), nextScrollDelay);
     }
 
-    getHumanScrollDelay() {
-        // חישוב השהייה אנושית בהתאם למהירות
-        const baseDelay = {
-            1: 150, // איטי
-            2: 100, // בינוני  
-            3: 50   // מהיר
-        };
+    findVisibleUnprocessedPosts() {
+        const allPosts = this.findPosts();
+        const visibleUnprocessedPosts = [];
         
-        const delay = baseDelay[this.autoScrollSpeed] || 100;
-        const randomVariation = Math.random() * 50; // וריאציה של עד 50ms
+        for (const post of allPosts) {
+            const postId = this.getPostId(post);
+            if (postId && !this.processedPosts.has(postId) && this.isElementVisible(post)) {
+                visibleUnprocessedPosts.push(post);
+            }
+        }
         
-        return delay + randomVariation;
+        return visibleUnprocessedPosts;
     }
 
-    pauseAutoScrollForPost(postElement) {
+    pauseAutoScrollForPost(postElement, postId) {
         if (!this.isAutoScrolling) return;
         
         this.scrollPausedForPost = true;
-        console.log('📜 ⏸️ Auto-scroll paused for post interaction');
+        console.log('📜 ⏸️ Auto-scroll paused for post:', postId.substring(0, 20) + '...');
         
-        // אם יש תגובות אוטומטיות, חכה לפעולת המשתמש
-        if (this.settings.autoComments && this.currentPersonaId) {
-            this.waitingForUserAction = true;
-            console.log('📜 💬 Waiting for user to approve comment...');
+        // חכה לסיום עיבוד הפוסט
+        const checkProcessingComplete = () => {
+            const timer = this.viewTimers.get(postId);
             
-            // מעקב אחר לחיצות על כפתורי שליחה
-            this.monitorSubmitButtons();
-        } else {
-            // אם אין תגובות, המשך אחרי זמן קצוב
-            const pauseDuration = this.getPostReadingTime();
-            this.scrollPauseTimeout = setTimeout(() => {
-                this.resumeAutoScroll();
-            }, pauseDuration);
-        }
-    }
-
-    monitorSubmitButtons() {
-        // מעקב אחר כפתורי שליחה שעלולים להיות מוקפים בירוק
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.type === 'childList') {
-                    // בדיקה אם נוסף כפתור שליחה מוקף בירוק
-                    const submitButtons = document.querySelectorAll('button[style*="border: 3px solid rgb(0, 255, 0)"]');
-                    if (submitButtons.length > 0) {
-                        console.log('📜 💬 Found highlighted submit button, monitoring for click...');
-                        
-                        // מעקב אחר לחיצה על כפתור השליחה
-                        submitButtons.forEach(button => {
-                            const clickHandler = () => {
-                                console.log('📜 ✅ User clicked submit button, resuming auto-scroll...');
-                                button.removeEventListener('click', clickHandler);
-                                observer.disconnect();
-                                setTimeout(() => this.resumeAutoScroll(), 2000); // המתנה קצרה לאחר השליחה
-                            };
-                            button.addEventListener('click', clickHandler);
-                        });
-                    }
-                }
-            });
-        });
+            // בדוק אם הפוסט סיים להתעבד
+            const likesComplete = !this.settings.autoLikes || (timer && timer.likeProcessed);
+            const commentsComplete = !this.settings.autoComments || !this.currentPersonaId || (timer && timer.commentProcessed);
+            
+            if (likesComplete && commentsComplete) {
+                console.log('📜 ✅ Post processing complete, resuming scroll...');
+                setTimeout(() => this.resumeAutoScroll(), 1000);
+            } else {
+                // בדוק שוב בעוד שנייה
+                setTimeout(checkProcessingComplete, 1000);
+            }
+        };
         
-        observer.observe(document.body, {
-            childList: true,
-            subtree: true
-        });
+        // התחל בדיקה אחרי 2 שניות (זמן לעיבוד ראשוני)
+        setTimeout(checkProcessingComplete, 2000);
         
-        // timeout לביטול המעקב אם המשתמש לא פועל
+        // timeout לביטול המעקב אם לוקח יותר מדי זמן
         setTimeout(() => {
-            observer.disconnect();
-            if (this.waitingForUserAction) {
-                console.log('📜 ⏰ User action timeout, resuming auto-scroll...');
+            if (this.scrollPausedForPost) {
+                console.log('📜 ⏰ Post processing timeout, resuming auto-scroll...');
                 this.resumeAutoScroll();
             }
-        }, 30000); // 30 שניות timeout
+        }, 15000); // 15 שניות timeout
     }
 
     resumeAutoScroll() {
@@ -1284,18 +1340,18 @@ class SocialBotContentScript {
         setTimeout(() => this.performAutoScroll(), 1000);
     }
 
-    getPostReadingTime() {
-        // זמן קריאה משוער בהתאם למהירות
-        const readingTimes = {
-            1: 4000, // איטי - 4 שניות
-            2: 2500, // בינוני - 2.5 שניות
-            3: 1500  // מהיר - 1.5 שניות
+    getHumanScrollDelay() {
+        // חישוב השהייה אנושית בהתאם למהירות
+        const baseDelay = {
+            1: 150, // איטי
+            2: 100, // בינוני  
+            3: 50   // מהיר
         };
         
-        const baseTime = readingTimes[this.autoScrollSpeed] || 2500;
-        const randomVariation = Math.random() * 1000; // וריאציה של עד שנייה
+        const delay = baseDelay[this.autoScrollSpeed] || 100;
+        const randomVariation = Math.random() * 50; // וריאציה של עד 50ms
         
-        return baseTime + randomVariation;
+        return delay + randomVariation;
     }
 
     showAutoScrollIndicator(show) {
@@ -1310,30 +1366,73 @@ class SocialBotContentScript {
                 left: 10px;
                 background: linear-gradient(45deg, #667eea, #764ba2);
                 color: white;
-                padding: 8px 15px;
+                padding: 10px 15px;
                 border-radius: 20px;
                 font-size: 12px;
                 font-weight: bold;
                 z-index: 10000;
                 box-shadow: 0 2px 10px rgba(0,0,0,0.3);
                 animation: pulse 2s infinite;
+                min-width: 200px;
             `;
-            indicator.innerHTML = `📜 גלילה אוטומטית פעילה (מהירות ${this.autoScrollSpeed})`;
+            
+            this.updateScrollIndicatorContent(indicator);
             document.body.appendChild(indicator);
             
             // הוספת אנימציה
-            const style = document.createElement('style');
-            style.textContent = `
-                @keyframes pulse {
-                    0%, 100% { opacity: 1; transform: scale(1); }
-                    50% { opacity: 0.8; transform: scale(1.05); }
+            if (!document.getElementById('scroll-indicator-style')) {
+                const style = document.createElement('style');
+                style.id = 'scroll-indicator-style';
+                style.textContent = `
+                    @keyframes pulse {
+                        0%, 100% { opacity: 1; transform: scale(1); }
+                        50% { opacity: 0.8; transform: scale(1.05); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // עדכון תקופתי של המידע באינדיקטור
+            this.indicatorUpdateInterval = setInterval(() => {
+                if (this.isAutoScrolling) {
+                    this.updateScrollIndicatorContent(indicator);
                 }
-            `;
-            document.head.appendChild(style);
+            }, 2000);
             
         } else if (!show && existingIndicator) {
             existingIndicator.remove();
+            if (this.indicatorUpdateInterval) {
+                clearInterval(this.indicatorUpdateInterval);
+                this.indicatorUpdateInterval = null;
+            }
         }
+    }
+
+    updateScrollIndicatorContent(indicator) {
+        if (!indicator) return;
+        
+        const visiblePosts = this.findVisibleUnprocessedPosts();
+        const processedCount = this.processedPosts.size;
+        
+        let status = '📜 גלילה אוטומטית';
+        let details = `מהירות ${this.autoScrollSpeed}`;
+        
+        if (this.scrollPausedForPost) {
+            status = '⏸️ מעבד פוסט';
+            details = `נמצאו ${visiblePosts.length} פוסטים`;
+        } else if (this.waitingForUserAction) {
+            status = '⏳ ממתין לאישור';
+            details = 'אשר תגובה להמשך';
+        } else {
+            details = `עובד פוסט ${processedCount}`;
+        }
+        
+        indicator.innerHTML = `
+            <div style="display: flex; flex-direction: column; align-items: center;">
+                <div>${status}</div>
+                <div style="font-size: 10px; opacity: 0.8;">${details}</div>
+            </div>
+        `;
     }
 }
 
