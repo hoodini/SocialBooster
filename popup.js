@@ -858,15 +858,19 @@ class SocialBotPopup {
     }
 
     updateGlobalToggleUI(globallyEnabled) {
+        const toggle = document.getElementById('globalToggle');
         const toggleStatusText = document.getElementById('toggleStatusText');
-        const toggleStatus = document.getElementById('toggleStatus');
         
         if (globallyEnabled) {
-            toggleStatusText.textContent = this.languageManager.translate('extensionEnabled');
-            toggleStatusText.className = 'enabled';
+            toggle.checked = true;
+            toggle.classList.add('enabled');
+            toggleStatusText.textContent = this.languageManager.get('extensionEnabled');
+            toggleStatusText.className = 'toggle-status enabled';
         } else {
-            toggleStatusText.textContent = this.languageManager.translate('extensionDisabled');
-            toggleStatusText.className = 'disabled';
+            toggle.checked = false;
+            toggle.classList.remove('enabled');
+            toggleStatusText.textContent = this.languageManager.get('extensionDisabled');
+            toggleStatusText.className = 'toggle-status disabled';
         }
         
         console.log('🔄 Global toggle UI updated:', globallyEnabled ? 'ENABLED' : 'DISABLED');

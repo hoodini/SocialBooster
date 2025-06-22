@@ -283,24 +283,63 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
 
         async initAnalyticsDB() {
             try {
-                // טעינת הסקריפט של בסיס הנתונים
-                if (!window.SocialBotDB) {
-                    const script = document.createElement('script');
-                    script.src = chrome.runtime.getURL('db.js');
-                    document.head.appendChild(script);
-                    
-                    // המתנה לטעינת הסקריפט
-                    await new Promise((resolve) => {
-                        script.onload = resolve;
-                    });
+                // בדיקה אם המחלקה כבר קיימת
+                if (window.SocialBotDB) {
+                    this.db = new window.SocialBotDB();
+                    await this.db.init();
+                    console.log('Analytics DB initialized successfully (class already loaded)');
+                    return;
                 }
                 
-                this.db = new window.SocialBotDB();
-                await this.db.init();
-                console.log('Analytics DB initialized successfully');
+                // טעינת הסקריפט של בסיס הנתונים
+                console.log('Loading db.js script...');
+                const script = document.createElement('script');
+                script.src = chrome.runtime.getURL('db.js');
+                document.head.appendChild(script);
+                
+                // המתנה לטעינת הסקריפט עם timeout
+                await new Promise((resolve, reject) => {
+                    let attempts = 0;
+                    const maxAttempts = 10;
+                    
+                    const checkLoaded = () => {
+                        attempts++;
+                        console.log(`Checking for SocialBotDB class, attempt ${attempts}/${maxAttempts}`);
+                        
+                        if (window.SocialBotDB) {
+                            console.log('✅ SocialBotDB class found!');
+                            resolve();
+                        } else if (attempts >= maxAttempts) {
+                            console.log('❌ SocialBotDB class not found after max attempts');
+                            reject(new Error('SocialBotDB class not available after loading script'));
+                        } else {
+                            setTimeout(checkLoaded, 200);
+                        }
+                    };
+                    
+                    script.onload = () => {
+                        console.log('db.js script loaded, checking for class...');
+                        setTimeout(checkLoaded, 100);
+                    };
+                    
+                    script.onerror = () => {
+                        reject(new Error('Failed to load db.js script'));
+                    };
+                });
+                
+                // יצירת המופע
+                if (window.SocialBotDB) {
+                    this.db = new window.SocialBotDB();
+                    await this.db.init();
+                    console.log('Analytics DB initialized successfully');
+                } else {
+                    throw new Error('SocialBotDB class still not available');
+                }
                 
             } catch (error) {
                 console.error('Failed to initialize analytics DB:', error);
+                console.log('Analytics will be disabled for this session');
+                this.db = null;
             }
         }
 

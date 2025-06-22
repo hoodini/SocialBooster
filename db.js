@@ -442,4 +442,8 @@ if (typeof window.SocialBotDB === 'undefined') {
 
     // חשיפת המחלקה לwindow
     window.SocialBotDB = SocialBotDB;
+    console.log('✅ SocialBotDB class exposed to window');
+    
+} else {
+    console.log('ℹ️ SocialBotDB already exists in window');
 } 
