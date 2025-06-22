@@ -1,0 +1,229 @@
+/* YUV.AI SocialBot Pro - Content Styles */
+
+/* Extension indicator */
+.yuv-ai-extension-indicator {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    z-index: 10000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    animation: fadeInOut 3s ease-in-out infinite alternate;
+    display: none;
+}
+
+.yuv-ai-extension-indicator.active {
+    display: block;
+}
+
+@keyframes fadeInOut {
+    0% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* Comment box enhancement */
+.yuv-ai-enhanced-comment {
+    border: 2px solid #667eea !important;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+    background: rgba(102, 126, 234, 0.05) !important;
+}
+
+/* Processing indicator */
+.yuv-ai-processing {
+    position: relative;
+}
+
+.yuv-ai-processing::after {
+    content: '🤖 YUV.AI מכין תגובה...';
+    position: absolute;
+    top: -30px;
+    left: 0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    white-space: nowrap;
+    z-index: 1000;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+}
+
+/* Auto-like indicator */
+.yuv-ai-auto-liked {
+    position: relative;
+}
+
+.yuv-ai-auto-liked::before {
+    content: '✨';
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    font-size: 16px;
+    animation: sparkle 2s ease-in-out;
+}
+
+@keyframes sparkle {
+    0% { opacity: 0; transform: scale(0.5) rotate(0deg); }
+    50% { opacity: 1; transform: scale(1.2) rotate(180deg); }
+    100% { opacity: 0; transform: scale(0.5) rotate(360deg); }
+}
+
+/* Status overlay */
+.yuv-ai-status-overlay {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: white;
+    padding: 20px 30px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 10001;
+    display: none;
+    text-align: center;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+}
+
+.yuv-ai-status-overlay.show {
+    display: block;
+    animation: slideInScale 0.3s ease-out;
+}
+
+@keyframes slideInScale {
+    0% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.8);
+    }
+    100% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+/* LinkedIn specific enhancements */
+.linkedin-post-enhanced {
+    position: relative;
+}
+
+.linkedin-post-enhanced::before {
+    content: 'YUV.AI';
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Facebook specific enhancements */
+.facebook-post-enhanced {
+    position: relative;
+}
+
+.facebook-post-enhanced::before {
+    content: 'YUV.AI';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(102, 126, 234, 0.1);
+    color: #667eea;
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+/* Typing indicator */
+.yuv-ai-typing {
+    position: relative;
+}
+
+.yuv-ai-typing::after {
+    content: '';
+    position: absolute;
+    bottom: 5px;
+    right: 10px;
+    width: 20px;
+    height: 10px;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 10"><circle cx="2" cy="5" r="1.5" fill="%23667eea"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="0s"/></circle><circle cx="10" cy="5" r="1.5" fill="%23667eea"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="0.5s"/></circle><circle cx="18" cy="5" r="1.5" fill="%23667eea"><animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" begin="1s"/></circle></svg>') no-repeat center;
+    background-size: contain;
+}
+
+/* Error states */
+.yuv-ai-error {
+    border-color: #ff4757 !important;
+    box-shadow: 0 0 0 3px rgba(255, 71, 87, 0.1) !important;
+}
+
+.yuv-ai-error-message {
+    color: #ff4757;
+    font-size: 12px;
+    margin-top: 5px;
+    font-weight: 500;
+}
+
+/* Success states */
+.yuv-ai-success {
+    border-color: #2ed573 !important;
+    box-shadow: 0 0 0 3px rgba(46, 213, 115, 0.1) !important;
+}
+
+/* Hover effects */
+.yuv-ai-enhanced-comment:hover {
+    transform: translateY(-1px);
+    transition: all 0.3s ease;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+    .yuv-ai-extension-indicator {
+        bottom: 10px;
+        right: 10px;
+        padding: 6px 12px;
+        font-size: 11px;
+    }
+    
+    .yuv-ai-status-overlay {
+        padding: 15px 20px;
+        font-size: 13px;
+    }
+    
+    .linkedin-post-enhanced::before,
+    .facebook-post-enhanced::before {
+        font-size: 9px;
+        padding: 1px 4px;
+    }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+    .yuv-ai-extension-indicator {
+        background: #000;
+        border: 2px solid #fff;
+    }
+    
+    .yuv-ai-enhanced-comment {
+        border-color: #000 !important;
+        background: #fff !important;
+    }
+} 

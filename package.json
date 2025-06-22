@@ -1,0 +1,45 @@
+{
+  "name": "yuv-ai-socialbot-pro",
+  "version": "3.0.0",
+  "description": "Advanced AI-powered social media automation with Cohere LLM integration - FLY HIGH WITH YUV.AI",
+  "author": "Yuval Avidani (YUV.AI)",
+  "license": "MIT",
+  "homepage": "https://linktr.ee/yuvai",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yuvalav/yuv-ai-socialbot-pro.git"
+  },
+  "keywords": [
+    "chrome-extension",
+    "linkedin-automation",
+    "facebook-automation", 
+    "ai-comments",
+    "cohere-ai",
+    "social-media-bot",
+    "yuv-ai"
+  ],
+  "scripts": {
+    "build": "npm run validate && npm run lint && npm run test",
+    "validate": "node scripts/validate-manifest.js",
+    "lint": "echo 'Linting JavaScript files...' && node scripts/lint-check.js",
+    "test": "echo 'Running extension tests...' && node scripts/test-extension.js",
+    "package": "npm run build && node scripts/package-extension.js",
+    "install-dev": "echo 'Installing development dependencies...'",
+    "clean": "echo 'Cleaning build files...' && rm -rf dist/ *.zip"
+  },
+  "devDependencies": {},
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "manifest": {
+    "manifest_version": 3,
+    "name": "YUV.AI SocialBot Pro - Smart Auto Engager",
+    "version": "3.0.0"
+  },
+  "social": {
+    "twitter": "@yuvalav",
+    "instagram": "@yuval_770", 
+    "linkedin": "https://www.linkedin.com/in/%F0%9F%8E%97%EF%B8%8Fyuval-avidani-87081474/",
+    "linktr.ee": "https://linktr.ee/yuvai"
+  }
+} 

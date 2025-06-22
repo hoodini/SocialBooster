@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YUV.AI SocialBot Pro</title>
+    <link rel="stylesheet" href="popup.css">
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="logo-section">
+                <div class="logo">YUV.AI</div>
+                <div class="subtitle">SocialBot Pro</div>
+                <div class="motto">FLY HIGH WITH YUV.AI</div>
+            </div>
+        </div>
+
+        <!-- Status Indicator -->
+        <div class="status-section">
+            <div class="status-indicator" id="statusIndicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span class="status-text" id="statusText">לא מחובר</span>
+            </div>
+        </div>
+
+        <!-- API Key Section -->
+        <div class="section">
+            <h3>🔑 הגדרת מפתח API</h3>
+            <div class="input-group">
+                <input type="password" id="apiKey" placeholder="הזן מפתח API של Cohere" />
+                <button id="saveApiKey" class="btn-primary">שמור</button>
+            </div>
+            <div class="api-info" id="apiInfo" style="display: none;">
+                <div class="api-model">מודל: <span id="modelName">command-a-03-2025</span></div>
+                <div class="api-status">סטטוס: <span id="apiStatus">✅ מחובר</span></div>
+            </div>
+        </div>
+
+        <!-- Personas Section -->
+        <div class="section">
+            <h3>🎭 ניהול פרסונות</h3>
+            
+            <div class="persona-controls">
+                <select id="personaSelect">
+                    <option value="">בחר פרסונה</option>
+                </select>
+                <button id="addPersona" class="btn-secondary">➕ הוסף</button>
+                <button id="editPersona" class="btn-secondary">✏️ ערוך</button>
+                <button id="deletePersona" class="btn-danger">🗑️ מחק</button>
+            </div>
+
+            <div class="persona-form" id="personaForm" style="display: none;">
+                <input type="text" id="personaName" placeholder="שם הפרסונה" />
+                <textarea id="personaDescription" placeholder="תיאור אופי וטונציה של הפרסונה"></textarea>
+                <div class="examples-section">
+                    <label>דוגמאות לכתיבה:</label>
+                    <div id="examplesContainer">
+                        <textarea class="example-input" placeholder="דוגמה 1"></textarea>
+                    </div>
+                    <button id="addExample" class="btn-small">➕ הוסף דוגמה</button>
+                </div>
+                <div class="form-actions">
+                    <button id="savePersona" class="btn-primary">שמור פרסונה</button>
+                    <button id="cancelPersona" class="btn-secondary">ביטול</button>
+                </div>
+            </div>
+
+            <div class="persona-note">
+                <small>💡 הדוגמאות והתיאורים יהיו חלק מהפרומפט שנשלח למודל השפה</small>
+            </div>
+        </div>
+
+        <!-- Automation Settings -->
+        <div class="section">
+            <h3>🤖 הגדרות אוטומציה</h3>
+            
+            <div class="automation-options">
+                <div class="option">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="autoLikes" />
+                        <span class="checkmark"></span>
+                        לייקים אוטומטיים (1.5 שניות)
+                    </label>
+                </div>
+                
+                <div class="option">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="autoComments" />
+                        <span class="checkmark"></span>
+                        תגובות אוטומטיות (3 שניות)
+                    </label>
+                </div>
+            </div>
+
+            <div class="platform-selection">
+                <h4>פלטפורמות:</h4>
+                <div class="platform-options">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="linkedinEnabled" checked />
+                        <span class="checkmark"></span>
+                        LinkedIn
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="facebookEnabled" />
+                        <span class="checkmark"></span>
+                        Facebook
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="section">
+            <h3>📊 סטטיסטיקות</h3>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalLikes">0</div>
+                    <div class="stat-label">לייקים</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalComments">0</div>
+                    <div class="stat-label">תגובות</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="activeSession">0</div>
+                    <div class="stat-label">דקות פעילות</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <div class="creator-info">
+                <div class="creator-name">יצר: יובל אבידני</div>
+                <div class="social-links">
+                    <a href="https://linktr.ee/yuvai" target="_blank">🔗 Linktr.ee</a>
+                    <a href="https://www.linkedin.com/in/%F0%9F%8E%97%EF%B8%8Fyuval-avidani-87081474/" target="_blank">💼 LinkedIn</a>
+                    <a href="https://twitter.com/yuvalav" target="_blank">🐦 @yuvalav</a>
+                    <a href="https://instagram.com/yuval_770" target="_blank">📸 @yuval_770</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html> 
