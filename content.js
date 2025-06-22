@@ -160,9 +160,26 @@ class SocialBotContentScript {
     }
 
     handleClick(event) {
-        if (this.isReplyButton(event.target)) {
-            setTimeout(() => this.handleReplyClick(event.target), 500);
+        const clickedElement = event.target;
+        
+        // בדיקה אם זה כפתור Reply או אלמנט בתוכו
+        if (this.isReplyButton(clickedElement) || this.findParentReplyButton(clickedElement)) {
+            const replyButton = this.isReplyButton(clickedElement) ? clickedElement : this.findParentReplyButton(clickedElement);
+            console.log('💬 Reply button clicked, scheduling reply generation...');
+            setTimeout(() => this.handleReplyClick(replyButton), 1000);
         }
+    }
+
+    findParentReplyButton(element) {
+        // חיפוש כפתור Reply בהיררכיה של האלמנט
+        let current = element;
+        while (current && current !== document.body) {
+            if (this.isReplyButton(current)) {
+                return current;
+            }
+            current = current.parentElement;
+        }
+        return null;
     }
 
     startScrollMonitoring() {
@@ -1050,9 +1067,36 @@ class SocialBotContentScript {
     }
 
     isReplyButton(element) {
-        const text = element.textContent.toLowerCase();
+        if (!element) return false;
+        
+        const text = element.textContent?.toLowerCase() || '';
         const ariaLabel = element.getAttribute('aria-label')?.toLowerCase() || '';
-        return text.includes('reply') || text.includes('השב') || ariaLabel.includes('reply') || ariaLabel.includes('השב');
+        const className = element.className?.toLowerCase() || '';
+        const dataControlName = element.getAttribute('data-control-name') || '';
+        
+        // בדיקות מרובות לזיהוי כפתור Reply
+        const conditions = [
+            text.includes('reply'),
+            text.includes('השב'),
+            ariaLabel.includes('reply'),
+            ariaLabel.includes('השב'),
+            className.includes('reply'),
+            dataControlName.includes('reply'),
+            element.tagName === 'BUTTON' && (text === 'reply' || ariaLabel === 'reply')
+        ];
+        
+        const isReply = conditions.some(condition => condition);
+        
+        if (isReply) {
+            console.log('💬 Reply button detected:', {
+                text: text,
+                ariaLabel: ariaLabel,
+                className: className,
+                dataControlName: dataControlName
+            });
+        }
+        
+        return isReply;
     }
 
     isAlreadyLiked(likeButton) {
@@ -1102,15 +1146,72 @@ class SocialBotContentScript {
     }
 
     extractCommentContent(commentElement) {
-        return commentElement.textContent.trim();
+        if (!commentElement) return '';
+        
+        // נסה למצוא את תוכן התגובה עם סלקטורים ספציפיים
+        const contentSelectors = [
+            '.comments-comment-item__main-content',
+            '.comment-content',
+            '.comments-comment-item-content-body',
+            '.feed-shared-text',
+            '.attributed-text-segment-list__content'
+        ];
+        
+        for (const selector of contentSelectors) {
+            const content = commentElement.querySelector(selector);
+            if (content) {
+                const text = content.textContent.trim();
+                console.log('💬 Extracted comment content:', text.substring(0, 50) + '...');
+                return text;
+            }
+        }
+        
+        // אם לא נמצא עם סלקטורים ספציפיים, קח את כל הטקסט
+        const fallbackText = commentElement.textContent.trim();
+        console.log('💬 Extracted comment content (fallback):', fallbackText.substring(0, 50) + '...');
+        return fallbackText;
     }
 
     findParentComment(element) {
-        return element.closest('.comment, .comments-comment-item');
+        const selectors = [
+            '.comments-comment-item',
+            '.comment',
+            '.comments-comment',
+            '[data-test-id="comment"]',
+            '.social-details-social-activity__comment'
+        ];
+        
+        for (const selector of selectors) {
+            const comment = element.closest(selector);
+            if (comment) {
+                console.log('💬 Found parent comment with selector:', selector);
+                return comment;
+            }
+        }
+        
+        console.log('💬 No parent comment found');
+        return null;
     }
 
     findParentPost(element) {
-        return element.closest('.feed-shared-update-v2, .occludable-update, [data-pagelet="FeedUnit"]');
+        const selectors = [
+            '.feed-shared-update-v2',
+            '.occludable-update',
+            '[data-pagelet="FeedUnit"]',
+            '.feed-shared-update',
+            '.update-components-update-v2'
+        ];
+        
+        for (const selector of selectors) {
+            const post = element.closest(selector);
+            if (post) {
+                console.log('💬 Found parent post with selector:', selector);
+                return post;
+            }
+        }
+        
+        console.log('💬 No parent post found');
+        return null;
     }
 
     async simulateHumanClick(element) {

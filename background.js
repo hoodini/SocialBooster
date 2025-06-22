@@ -126,44 +126,61 @@ class SocialBotBackground {
     }
 
     buildPrompt(persona, postContent, replyContext = null) {
-        let prompt = `אתה כותב תגובות ברשתות חברתיות בהתאם לפרסונה הבאה:
+        // זיהוי שפת הפוסט
+        const isEnglish = this.detectLanguage(postContent);
+        const languageInstruction = isEnglish ? 
+            "Write your response in English" : 
+            "כתב את התגובה בעברית";
 
-שם הפרסונה: ${persona.name}
-תיאור: ${persona.description}
+        let prompt = `You are writing social media comments according to the following persona:
 
-דוגמאות לכתיבה:
+Persona Name: ${persona.name}
+Description: ${persona.description}
+
+Writing Examples:
 ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
 
 `;
 
         if (replyContext) {
-            prompt += `תוכן הפוסט המקורי:
-"${postContent}"
+            prompt += `Original Post Content:
+${postContent}
 
-התגובה שאליה אתה מגיב:
-"${replyContext}"
+Comment you are replying to:
+${replyContext}
 
-כתב תגובה קצרה ורלוונטית לתגובה הנ"ל, תוך התחשבות בהקשר של הפוסט המקורי.`;
+Write a short and relevant reply to the above comment, considering the context of the original post.`;
         } else {
-            prompt += `תוכן הפוסט:
-"${postContent}"
+            prompt += `Post Content:
+${postContent}
 
-כתב תגובה קצרה, מעניינת ורלוונטית לפוסט הזה.`;
+Write a short, interesting and relevant comment to this post.`;
         }
 
         prompt += `
 
-דרישות:
-- התגובה צריכה להיות באותו סגנון ואופי כמו בדוגמאות
-- אל תשתמש באמוג'ים אלא אם כן זה מופיע בדוגמאות
-- אל תחזור על המילים מהפוסט המקורי
-- התגובה צריכה להיות קצרה (עד 50 מילים)
-- כתב בעברית
-- הייה טבעי ואותנטי
+Requirements:
+- The comment should match the same style and personality as shown in the examples
+- Do not use emojis unless they appear in the examples
+- Do not repeat words from the original post
+- Keep the comment short (up to 50 words)
+- ${languageInstruction}
+- Be natural and authentic
+- Do NOT wrap the response in quotes or quotation marks
+- Return ONLY the comment text, nothing else
 
-תגובה:`;
+Comment:`;
 
         return prompt;
+    }
+
+    detectLanguage(text) {
+        // זיהוי שפה פשוט - בודק אם יש יותר תווים לטיניים מאשר עבריים
+        const englishChars = (text.match(/[a-zA-Z]/g) || []).length;
+        const hebrewChars = (text.match(/[\u0590-\u05FF]/g) || []).length;
+        
+        // אם יש יותר תווים אנגליים או אם אין תווים עבריים כלל
+        return englishChars > hebrewChars || hebrewChars === 0;
     }
 
     async callCohereStream(apiKey, prompt) {
@@ -255,8 +272,18 @@ ${persona.examples.map((example, i) => `${i + 1}. ${example}`).join('\n')}
             reader.releaseLock();
         }
 
-        const finalComment = comment.trim();
-        console.log('Generated comment:', finalComment);
+        let finalComment = comment.trim();
+        
+        // הסרת ציטוטים מהתחלה והסוף
+        finalComment = finalComment.replace(/^["״"']+|["״"']+$/g, '');
+        
+        // הסרת ביטויים מיותרים
+        finalComment = finalComment.replace(/^(תגובה:|Comment:|Response:)\s*/i, '');
+        
+        // ניקוי נוסף
+        finalComment = finalComment.trim();
+        
+        console.log('Generated comment (cleaned):', finalComment);
         return finalComment;
     }
 
