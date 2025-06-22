@@ -48,7 +48,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "db.js", "dashboard.html", "dashboard.css", "dashboard.js"],
+      "resources": ["icons/*", "db.js", "dashboard.html", "dashboard.css", "dashboard.js", "translations.js"],
       "matches": ["<all_urls>"]
     }
   ]

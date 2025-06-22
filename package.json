@@ -12,7 +12,7 @@
   "keywords": [
     "chrome-extension",
     "linkedin-automation",
-    "facebook-automation", 
+    "facebook-automation",
     "ai-comments",
     "cohere-ai",
     "social-media-bot",
@@ -27,7 +27,9 @@
     "install-dev": "echo 'Installing development dependencies...'",
     "clean": "echo 'Cleaning build files...' && rm -rf dist/ *.zip"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "sharp": "^0.34.2"
+  },
   "engines": {
     "node": ">=14.0.0"
   },
@@ -38,8 +40,8 @@
   },
   "social": {
     "twitter": "@yuvalav",
-    "instagram": "@yuval_770", 
+    "instagram": "@yuval_770",
     "linkedin": "https://www.linkedin.com/in/%F0%9F%8E%97%EF%B8%8Fyuval-avidani-87081474/",
     "linktr.ee": "https://linktr.ee/yuvai"
   }
-} 
+}

@@ -31,6 +31,43 @@ body {
     overflow: hidden;
 }
 
+/* Language Switcher */
+.language-switcher {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    z-index: 10;
+    display: flex;
+    gap: 5px;
+}
+
+.lang-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 20px;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.lang-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: scale(1.1);
+}
+
+.lang-btn.active {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: white;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
 .header::before {
     content: '';
     position: absolute;

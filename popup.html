@@ -6,11 +6,16 @@
     <title>YUV.AI SocialBot Pro</title>
     <link rel="stylesheet" href="popup.css">
     <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="translations.js"></script>
 </head>
 <body>
     <div class="container">
         <!-- Header -->
         <div class="header">
+            <div class="language-switcher">
+                <button id="langHe" class="lang-btn active" data-lang="he">🇮🇱</button>
+                <button id="langEn" class="lang-btn" data-lang="en">🇺🇸</button>
+            </div>
             <div class="logo-section">
                 <div class="logo">YUV.AI</div>
                 <div class="subtitle">SocialBot Pro</div>
@@ -22,67 +27,67 @@
         <div class="status-section">
             <div class="status-indicator" id="statusIndicator">
                 <span class="status-dot" id="statusDot"></span>
-                <span class="status-text" id="statusText">לא מחובר</span>
+                <span class="status-text" id="statusText" data-translate="statusDisconnected">לא מחובר</span>
             </div>
         </div>
 
         <!-- API Key Section -->
         <div class="section">
-            <h3>🔑 הגדרת מפתח API</h3>
+            <h3 data-translate="apiKeyTitle">🔑 הגדרת מפתח API</h3>
             <div class="input-group">
-                <input type="password" id="apiKey" placeholder="הזן מפתח API של Cohere" />
-                <button id="saveApiKey" class="btn-primary">שמור</button>
+                <input type="password" id="apiKey" data-translate="apiKeyPlaceholder" placeholder="הזן מפתח API של Cohere" />
+                <button id="saveApiKey" class="btn-primary" data-translate="saveButton">שמור</button>
             </div>
             <div class="api-info" id="apiInfo" style="display: none;">
-                <div class="api-model">מודל: <span id="modelName">command-a-03-2025</span></div>
-                <div class="api-status">סטטוס: <span id="apiStatus">✅ מחובר</span></div>
+                <div class="api-model"><span data-translate="modelLabel">מודל:</span> <span id="modelName">command-a-03-2025</span></div>
+                <div class="api-status"><span data-translate="statusLabel">סטטוס:</span> <span id="apiStatus" data-translate="statusConnectedText">✅ מחובר</span></div>
             </div>
         </div>
 
         <!-- Personas Section -->
         <div class="section">
-            <h3>🎭 ניהול פרסונות</h3>
+            <h3 data-translate="personasTitle">🎭 ניהול פרסונות</h3>
             
             <div class="persona-controls">
                 <select id="personaSelect">
-                    <option value="">בחר פרסונה</option>
+                    <option value="" data-translate="selectPersona">בחר פרסונה</option>
                 </select>
-                <button id="addPersona" class="btn-secondary">➕ הוסף</button>
-                <button id="editPersona" class="btn-secondary">✏️ ערוך</button>
-                <button id="deletePersona" class="btn-danger">🗑️ מחק</button>
+                <button id="addPersona" class="btn-secondary" data-translate="addPersona">➕ הוסף</button>
+                <button id="editPersona" class="btn-secondary" data-translate="editPersona">✏️ ערוך</button>
+                <button id="deletePersona" class="btn-danger" data-translate="deletePersona">🗑️ מחק</button>
             </div>
 
             <div class="persona-form" id="personaForm" style="display: none;">
-                <input type="text" id="personaName" placeholder="שם הפרסונה" />
-                <textarea id="personaDescription" placeholder="תיאור אופי וטונציה של הפרסונה"></textarea>
+                <input type="text" id="personaName" data-translate="personaNamePlaceholder" placeholder="שם הפרסונה" />
+                <textarea id="personaDescription" data-translate="personaDescriptionPlaceholder" placeholder="תיאור אופי וטונציה של הפרסונה"></textarea>
                 <div class="examples-section">
-                    <label>דוגמאות לכתיבה:</label>
+                    <label data-translate="examplesLabel">דוגמאות לכתיבה:</label>
                     <div id="examplesContainer">
-                        <textarea class="example-input" placeholder="דוגמה 1"></textarea>
+                        <textarea class="example-input" data-translate="examplePlaceholder" placeholder="דוגמה 1"></textarea>
                     </div>
-                    <button id="addExample" class="btn-small">➕ הוסף דוגמה</button>
+                    <button id="addExample" class="btn-small" data-translate="addExample">➕ הוסף דוגמה</button>
                 </div>
                 <div class="form-actions">
-                    <button id="savePersona" class="btn-primary">שמור פרסונה</button>
-                    <button id="cancelPersona" class="btn-secondary">ביטול</button>
+                    <button id="savePersona" class="btn-primary" data-translate="savePersona">שמור פרסונה</button>
+                    <button id="cancelPersona" class="btn-secondary" data-translate="cancelButton">ביטול</button>
                 </div>
             </div>
 
             <div class="persona-note">
-                <small>💡 הדוגמאות והתיאורים יהיו חלק מהפרומפט שנשלח למודל השפה</small>
+                <small data-translate="personaNote">💡 הדוגמאות והתיאורים יהיו חלק מהפרומפט שנשלח למודל השפה</small>
             </div>
         </div>
 
         <!-- Automation Settings -->
         <div class="section">
-            <h3>🤖 הגדרות אוטומציה</h3>
+            <h3 data-translate="automationTitle">🤖 הגדרות אוטומציה</h3>
             
             <div class="automation-options">
                 <div class="option">
                     <label class="checkbox-label">
                         <input type="checkbox" id="autoLikes" />
                         <span class="checkmark"></span>
-                        לייקים אוטומטיים (1.5 שניות)
+                        <span data-translate="autoLikes">לייקים אוטומטיים (1.5 שניות)</span>
                     </label>
                 </div>
 
@@ -90,7 +95,7 @@
                     <label class="checkbox-label">
                         <input type="checkbox" id="preferHeartReaction" />
                         <span class="checkmark"></span>
-                        העדף לב אהבה ❤️ במקום לייק רגיל 👍
+                        <span data-translate="preferHeartReaction">העדף לב אהבה ❤️ במקום לייק רגיל 👍</span>
                     </label>
                 </div>
                 
@@ -98,13 +103,13 @@
                     <label class="checkbox-label">
                         <input type="checkbox" id="autoComments" />
                         <span class="checkmark"></span>
-                        תגובות אוטומטיות (3 שניות)
+                        <span data-translate="autoComments">תגובות אוטומטיות (3 שניות)</span>
                     </label>
                 </div>
             </div>
 
             <div class="platform-selection">
-                <h4>פלטפורמות:</h4>
+                <h4 data-translate="platformsTitle">פלטפורמות:</h4>
                 <div class="platform-options">
                     <label class="checkbox-label">
                         <input type="checkbox" id="linkedinEnabled" checked />
@@ -120,10 +125,10 @@
             </div>
 
             <div class="save-settings">
-                <button id="saveAutomationBtn" class="btn-save">
+                <button id="saveAutomationBtn" class="btn-save" data-translate="saveAutomationSettings">
                     💾 שמור הגדרות אוטומציה
                 </button>
-                <div class="settings-status" id="settingsStatus" style="display: none;">
+                <div class="settings-status" id="settingsStatus" style="display: none;" data-translate="settingsSaved">
                     ✅ הגדרות נשמרו בהצלחה!
                 </div>
             </div>
@@ -131,23 +136,23 @@
 
         <!-- Statistics -->
         <div class="section">
-            <h3>📊 סטטיסטיקות</h3>
+            <h3 data-translate="statisticsTitle">📊 סטטיסטיקות</h3>
             <div class="stats-grid">
                 <div class="stat-item">
                     <div class="stat-value" id="totalLikes">0</div>
-                    <div class="stat-label">לייקים</div>
+                    <div class="stat-label" data-translate="likesLabel">לייקים</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-value" id="totalComments">0</div>
-                    <div class="stat-label">תגובות</div>
+                    <div class="stat-label" data-translate="commentsLabel">תגובות</div>
                 </div>
                 <div class="stat-item">
                     <div class="stat-value" id="activeSession">0</div>
-                    <div class="stat-label">דקות פעילות</div>
+                    <div class="stat-label" data-translate="activeSessionLabel">דקות פעילות</div>
                 </div>
             </div>
             <div class="dashboard-action">
-                <button id="dashboardBtn" class="dashboard-btn">
+                <button id="dashboardBtn" class="dashboard-btn" data-translate="openDashboard">
                     <span class="btn-icon">📈</span>
                     פתח דשבורד אנליטיקה מפורט
                 </button>
@@ -157,7 +162,7 @@
         <!-- Footer -->
         <div class="footer">
             <div class="creator-info">
-                <div class="creator-name">יצר: יובל אבידני</div>
+                <div class="creator-name" data-translate="createdBy">יצר: יובל אבידני</div>
                 <div class="social-links">
                     <a href="https://linktr.ee/yuvai" target="_blank">🔗 Linktr.ee</a>
                     <a href="https://www.linkedin.com/in/%F0%9F%8E%97%EF%B8%8Fyuval-avidani-87081474/" target="_blank">💼 LinkedIn</a>

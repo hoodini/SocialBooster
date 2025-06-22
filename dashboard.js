@@ -9,6 +9,7 @@ class AnalyticsDashboard {
         this.realTimeInterval = null;
         this.isRealTimeEnabled = true;
         this.activityItems = [];
+        this.languageManager = new LanguageManager();
         
         this.init();
     }
@@ -23,6 +24,9 @@ class AnalyticsDashboard {
         this.initEventListeners();
         this.setupRealTimeUpdates();
         this.setupMessageListener();
+        
+        // אתחול שפות
+        this.languageManager.updateTranslations();
         
         // טעינת נתונים ראשונית
         await this.loadDashboardData();
@@ -119,6 +123,10 @@ class AnalyticsDashboard {
                 e.target.style.display = 'none';
             }
         });
+
+        // מתחלף שפות
+        document.getElementById('langHeDash').addEventListener('click', () => this.switchLanguage('he'));
+        document.getElementById('langEnDash').addEventListener('click', () => this.switchLanguage('en'));
     }
 
     async loadDashboardData() {
@@ -866,6 +874,76 @@ class AnalyticsDashboard {
         } finally {
             button.disabled = false;
             button.innerHTML = originalText;
+        }
+    }
+
+    switchLanguage(lang) {
+        if (this.languageManager.setLanguage(lang)) {
+            // עדכון כפתורי השפה
+            document.querySelectorAll('.lang-btn-dash').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.lang === lang);
+            });
+
+            // עדכון תוכן דינמי
+            this.updateDynamicContent();
+            
+            // רענון הגרפים עם התרגומים החדשים
+            this.refreshChartsWithTranslations();
+        }
+    }
+
+    updateDynamicContent() {
+        // עדכון כפתורי הפעולה הידנית
+        const manualLikeBtn = document.getElementById('manualLikeBtn');
+        const manualCommentBtn = document.getElementById('manualCommentBtn');
+        
+        if (this.languageManager.currentLanguage === 'he') {
+            manualLikeBtn.innerHTML = '👍 לייק ידני';
+            manualCommentBtn.innerHTML = '💬 תגובה ידנית';
+        } else {
+            manualLikeBtn.innerHTML = '👍 Manual Like';
+            manualCommentBtn.innerHTML = '💬 Manual Comment';
+        }
+
+        // עדכון אפשרויות בורר הזמן
+        const timeSelect = document.getElementById('timeRangeSelect');
+        const currentValue = timeSelect.value;
+        
+        if (this.languageManager.currentLanguage === 'he') {
+            timeSelect.innerHTML = `
+                <option value="7">שבוע אחרון</option>
+                <option value="30">30 ימים אחרונים</option>
+                <option value="90">3 חודשים אחרונים</option>
+                <option value="365">שנה אחרונה</option>
+            `;
+        } else {
+            timeSelect.innerHTML = `
+                <option value="7">Last Week</option>
+                <option value="30">Last 30 Days</option>
+                <option value="90">Last 3 Months</option>
+                <option value="365">Last Year</option>
+            `;
+        }
+        
+        timeSelect.value = currentValue;
+
+        // עדכון כפתורי הפעולה
+        const refreshBtn = document.getElementById('refreshBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        
+        if (this.languageManager.currentLanguage === 'he') {
+            refreshBtn.textContent = 'רענן נתונים';
+            exportBtn.textContent = 'יצא נתונים';
+        } else {
+            refreshBtn.textContent = 'Refresh Data';
+            exportBtn.textContent = 'Export Data';
+        }
+    }
+
+    refreshChartsWithTranslations() {
+        // רענון הגרפים כדי להציג תרגומים מעודכנים
+        if (this.charts.daily) {
+            this.loadDashboardData();
         }
     }
 }

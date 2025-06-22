@@ -8,17 +8,22 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="db.js"></script>
+    <script src="translations.js"></script>
 </head>
 <body>
     <div class="dashboard-container">
         <!-- Header -->
         <header class="dashboard-header">
+            <div class="language-switcher-dashboard">
+                <button id="langHeDash" class="lang-btn-dash active" data-lang="he">🇮🇱</button>
+                <button id="langEnDash" class="lang-btn-dash" data-lang="en">🇺🇸</button>
+            </div>
             <div class="logo-section">
                 <img src="icons/icon48.png" alt="YUV.AI" class="logo">
                 <div class="brand-info">
-                    <h1>YUV.AI SocialBot Pro</h1>
+                    <h1 data-translate="dashboardTitle">YUV.AI SocialBot Pro</h1>
                     <p class="motto">FLY HIGH WITH YUV.AI</p>
-                    <p class="creator">Created by Yuval Avidani</p>
+                    <p class="creator" data-translate="createdBy">Created by Yuval Avidani</p>
                 </div>
             </div>
             <div class="header-controls">

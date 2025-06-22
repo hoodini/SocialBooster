@@ -4,6 +4,7 @@ class SocialBotPopup {
         this.currentPersonas = [];
         this.currentPersonaId = null;
         this.exampleCount = 1;
+        this.languageManager = new LanguageManager();
         this.init();
     }
 
@@ -12,6 +13,7 @@ class SocialBotPopup {
         this.setupEventListeners();
         this.updateUI();
         this.startStatsUpdater();
+        this.languageManager.updateTranslations();
     }
 
     async loadStoredData() {
@@ -91,6 +93,10 @@ class SocialBotPopup {
         document.getElementById('saveAutomationBtn').addEventListener('click', () => {
             this.saveAutomationSettingsManually();
         });
+
+        // Language switcher
+        document.getElementById('langHe').addEventListener('click', () => this.switchLanguage('he'));
+        document.getElementById('langEn').addEventListener('click', () => this.switchLanguage('en'));
     }
 
     async saveApiKey() {
@@ -466,6 +472,31 @@ class SocialBotPopup {
             url: chrome.runtime.getURL('dashboard.html'),
             active: true
         });
+    }
+
+    switchLanguage(lang) {
+        if (this.languageManager.setLanguage(lang)) {
+            // Update status messages based on current state
+            const statusText = document.getElementById('statusText');
+            const isDotConnected = document.getElementById('statusDot').classList.contains('connected');
+            
+            if (isDotConnected) {
+                statusText.textContent = this.languageManager.get('statusConnected') + ' ✅';
+            } else {
+                statusText.textContent = this.languageManager.get('statusDisconnected') + ' ❌';
+            }
+
+            // Update dynamic button text
+            const dashboardBtn = document.getElementById('dashboardBtn');
+            const btnText = this.languageManager.get('openDashboard');
+            dashboardBtn.innerHTML = `<span class="btn-icon">📈</span> ${btnText}`;
+
+            // Update example placeholders
+            const exampleInputs = document.querySelectorAll('.example-input');
+            exampleInputs.forEach((input, index) => {
+                input.placeholder = this.languageManager.get('examplePlaceholder') + ' ' + (index + 1);
+            });
+        }
     }
 }
 

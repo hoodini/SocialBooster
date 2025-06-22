@@ -35,6 +35,45 @@ body {
     position: sticky;
     top: 0;
     z-index: 100;
+    position: relative;
+}
+
+/* Language Switcher for Dashboard */
+.language-switcher-dashboard {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    z-index: 10;
+    display: flex;
+    gap: 5px;
+}
+
+.lang-btn-dash {
+    background: rgba(102, 126, 234, 0.1);
+    border: 2px solid rgba(102, 126, 234, 0.3);
+    border-radius: 20px;
+    width: 35px;
+    height: 35px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.lang-btn-dash:hover {
+    background: rgba(102, 126, 234, 0.2);
+    border-color: rgba(102, 126, 234, 0.5);
+    transform: scale(1.1);
+}
+
+.lang-btn-dash.active {
+    background: rgba(102, 126, 234, 0.8);
+    border-color: #667eea;
+    color: white;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
 }
 
 .logo-section {
