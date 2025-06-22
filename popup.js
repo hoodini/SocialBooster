@@ -31,11 +31,15 @@ class SocialBotPopup {
         console.log('🚀 SocialBot Pro initializing...');
         
         try {
+            // טעינת נתונים שמורים (כולל מפתח API) - תמיד נטען
+            await this.loadStoredData();
+            console.log('✅ Stored data loaded');
+            
             // בדיקה אם יש טאב פעיל מתאים
             const activeTab = await this.getActiveTab();
             if (!activeTab) {
                 this.showStatus('פתח דף LinkedIn או Facebook כדי להתחיל', 'info');
-                return;
+                // עדיין ממשיכים עם האתחול גם בלי טאב פעיל
             }
             
             // טעינת הגדרות
@@ -47,8 +51,12 @@ class SocialBotPopup {
             this.updateUI();
             console.log('✅ UI initialized');
             
-            // חיבור לטאב הפעיל
-            await this.connectToActiveTab();
+            // חיבור לטאב הפעיל (אם קיים)
+            if (activeTab) {
+                await this.connectToActiveTab();
+            } else {
+                console.log('ℹ️ No active social media tab found');
+            }
             
             // התחלת ניטור סטטוס
             this.startStatusMonitoring();
@@ -64,6 +72,9 @@ class SocialBotPopup {
 
     async refreshData() {
         try {
+            // טעינת נתונים שמורים מחדש
+            await this.loadStoredData();
+            
             // טעינת הגדרות מחדש
             await this.loadSettings();
             
@@ -252,10 +263,24 @@ class SocialBotPopup {
                 'stats'
             ]);
 
-            // Load API key
+            // Load API key and test connection
             if (result.cohereApiKey) {
                 document.getElementById('apiKey').value = result.cohereApiKey;
-                await this.testApiConnection(result.cohereApiKey);
+                this.apiKey = result.cohereApiKey;
+                console.log('🔑 API key loaded from storage');
+                
+                // Test the connection and update UI
+                const isValid = await this.testApiConnection(result.cohereApiKey);
+                if (isValid) {
+                    document.getElementById('apiInfo').style.display = 'block';
+                    console.log('✅ API key validated successfully');
+                } else {
+                    console.log('❌ Stored API key is invalid');
+                    this.showStatus('מפתח API שמור לא תקין - הזן מפתח חדש', 'warning');
+                }
+            } else {
+                console.log('ℹ️ No API key found in storage');
+                this.updateConnectionStatus(false);
             }
 
             // Load personas
@@ -283,15 +308,22 @@ class SocialBotPopup {
             // Load auto-scroll settings
             document.getElementById('autoScrollEnabled').checked = result.autoScrollEnabled || false;
             const scrollSpeed = result.autoScrollSpeed || 2;
-            document.querySelector(`input[name="scrollSpeed"][value="${scrollSpeed}"]`).checked = true;
+            const speedRadio = document.querySelector(`input[name="scrollSpeed"][value="${scrollSpeed}"]`);
+            if (speedRadio) {
+                speedRadio.checked = true;
+            }
             this.updateAutoScrollUI(result.autoScrollEnabled || false);
 
             // Load stats
             if (result.stats) {
                 this.updateStatsDisplay(result.stats);
             }
+            
+            console.log('📋 All stored data loaded successfully');
+            
         } catch (error) {
-            console.error('Error loading stored data:', error);
+            console.error('❌ Error loading stored data:', error);
+            this.showStatus('שגיאה בטעינת נתונים שמורים', 'error');
         }
     }
 
@@ -387,16 +419,39 @@ class SocialBotPopup {
             return;
         }
 
+        console.log('🔑 Saving API key...');
         this.showStatus('בודק חיבור...', 'loading');
         
-        const isValid = await this.testApiConnection(apiKey);
-        
-        if (isValid) {
-            await chrome.storage.sync.set({ cohereApiKey: apiKey });
-            this.showStatus('מפתח API נשמר בהצלחה!', 'success');
-            document.getElementById('apiInfo').style.display = 'block';
-        } else {
-            this.showStatus('מפתח API לא תקין או אין גישה למודל', 'error');
+        try {
+            const isValid = await this.testApiConnection(apiKey);
+            
+            if (isValid) {
+                // שמירה ב-storage
+                await chrome.storage.sync.set({ cohereApiKey: apiKey });
+                this.apiKey = apiKey; // שמירה גם במופע המקומי
+                
+                console.log('✅ API key saved successfully');
+                this.showStatus('מפתח API נשמר בהצלחה!', 'success');
+                document.getElementById('apiInfo').style.display = 'block';
+                
+                // וידוא שהמפתח נשמר על ידי קריאה מחדש
+                setTimeout(async () => {
+                    const stored = await chrome.storage.sync.get(['cohereApiKey']);
+                    if (stored.cohereApiKey === apiKey) {
+                        console.log('✅ API key persistence verified');
+                    } else {
+                        console.error('❌ API key was not saved properly');
+                        this.showStatus('שגיאה בשמירת המפתח - נסה שוב', 'error');
+                    }
+                }, 1000);
+                
+            } else {
+                this.showStatus('מפתח API לא תקין או אין גישה למודל', 'error');
+                this.updateConnectionStatus(false);
+            }
+        } catch (error) {
+            console.error('❌ Error saving API key:', error);
+            this.showStatus('שגיאה בשמירת המפתח - נסה שוב', 'error');
         }
     }
 
