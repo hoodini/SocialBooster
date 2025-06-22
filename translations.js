@@ -43,6 +43,12 @@ const translations = {
         activeSessionLabel: "דקות פעילות",
         openDashboard: "📈 פתח דשבורד אנליטיקה מפורט",
         
+        // Global Toggle
+        globalToggleTitle: "🔄 מתג הפעלה כללי",
+        extensionEnabled: "התוסף מופעל",
+        extensionDisabled: "התוסף כבוי",
+        toggleDescription: "השתמש במתג זה כדי להפעיל או לכבות את כל הפעילות האוטומטית של התוסף",
+
         // Footer
         createdBy: "יצר: יובל אבידני",
         
@@ -110,6 +116,12 @@ const translations = {
         activeSessionLabel: "Active Minutes",
         openDashboard: "📈 Open Detailed Analytics Dashboard",
         
+        // Global Toggle
+        globalToggleTitle: "🔄 Global Toggle",
+        extensionEnabled: "Extension Enabled",
+        extensionDisabled: "Extension Disabled", 
+        toggleDescription: "Use this toggle to enable or disable all automatic extension activity",
+
         // Footer
         createdBy: "Created by: Yuval Avidani",
         

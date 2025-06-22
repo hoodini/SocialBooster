@@ -26,6 +26,8 @@ class SocialBotPopup {
                 'autoComments', 
                 'linkedinEnabled',
                 'facebookEnabled',
+                'preferHeartReaction',
+                'globallyEnabled',
                 'stats'
             ]);
 
@@ -51,6 +53,11 @@ class SocialBotPopup {
             document.getElementById('preferHeartReaction').checked = result.preferHeartReaction || false;
             document.getElementById('linkedinEnabled').checked = result.linkedinEnabled !== false;
             document.getElementById('facebookEnabled').checked = result.facebookEnabled || false;
+
+            // Load global toggle state
+            const globallyEnabled = result.globallyEnabled !== false; // Default to true
+            document.getElementById('globalToggle').checked = globallyEnabled;
+            this.updateGlobalToggleUI(globallyEnabled);
 
             // Load stats
             if (result.stats) {
@@ -97,6 +104,11 @@ class SocialBotPopup {
         // Language switcher
         document.getElementById('langHe').addEventListener('click', () => this.switchLanguage('he'));
         document.getElementById('langEn').addEventListener('click', () => this.switchLanguage('en'));
+
+        // Global toggle
+        document.getElementById('globalToggle').addEventListener('change', (e) => {
+            this.toggleGlobalState(e.target.checked);
+        });
     }
 
     async saveApiKey() {
@@ -496,6 +508,60 @@ class SocialBotPopup {
             exampleInputs.forEach((input, index) => {
                 input.placeholder = this.languageManager.get('examplePlaceholder') + ' ' + (index + 1);
             });
+        }
+    }
+
+    updateGlobalToggleUI(globallyEnabled) {
+        const toggleStatusText = document.getElementById('toggleStatusText');
+        const toggleStatus = document.getElementById('toggleStatus');
+        
+        if (globallyEnabled) {
+            toggleStatusText.textContent = this.languageManager.translate('extensionEnabled');
+            toggleStatusText.className = 'enabled';
+        } else {
+            toggleStatusText.textContent = this.languageManager.translate('extensionDisabled');
+            toggleStatusText.className = 'disabled';
+        }
+        
+        console.log('🔄 Global toggle UI updated:', globallyEnabled ? 'ENABLED' : 'DISABLED');
+    }
+
+    async toggleGlobalState(enabled) {
+        try {
+            // שמירה ב-storage
+            await chrome.storage.sync.set({ globallyEnabled: enabled });
+            
+            // עדכון ה-UI
+            this.updateGlobalToggleUI(enabled);
+            
+            // שליחת הודעה לכל הטאבים הפעילים
+            const tabs = await chrome.tabs.query({});
+            for (const tab of tabs) {
+                if (tab.url && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
+                    try {
+                        await chrome.tabs.sendMessage(tab.id, {
+                            type: 'TOGGLE_GLOBAL_STATE',
+                            enabled: enabled
+                        });
+                    } catch (error) {
+                        // Tab might not have content script loaded
+                        console.log('Could not send message to tab:', tab.id);
+                    }
+                }
+            }
+            
+            // הודעת סטטוס
+            const statusMessage = enabled ? 
+                '✅ התוסף הופעל - פעילות אוטומטית מתחילה' : 
+                '🛑 התוסף כובה - כל הפעילות האוטומטית הופסקה';
+            
+            this.showStatus(statusMessage, enabled ? 'success' : 'warning');
+            
+            console.log('🔄 Global state changed:', enabled ? 'ENABLED' : 'DISABLED');
+            
+        } catch (error) {
+            console.error('Error toggling global state:', error);
+            this.showStatus('שגיאה בשינוי מצב התוסף', 'error');
         }
     }
 }

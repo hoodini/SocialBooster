@@ -5,6 +5,7 @@ class SocialBotContentScript {
         this.currentPersonaId = null;
         this.currentPlatform = this.detectPlatform();
         this.processedPosts = new Set();
+        this.commentedPosts = new Set(); // מעקב אחר פוסטים שכבר הגבתי להם
         this.viewTimers = new Map();
         this.scrollTimeout = null;
         this.isScrolling = false;
@@ -13,6 +14,7 @@ class SocialBotContentScript {
         this.isProcessingQueue = false;
         this.observedElements = new WeakSet();
         this.analyticsDB = null;
+        this.isGloballyEnabled = true; // מתג הפעלה כללי
         this.sessionData = {
             startTime: Date.now(),
             postsViewed: 0,
@@ -109,8 +111,22 @@ class SocialBotContentScript {
                 this.settings = response.settings;
                 this.currentPersonaId = response.settings.selectedPersonaId;
             }
+            
+            // טעינת המצב הגלובלי
+            const result = await chrome.storage.sync.get(['globallyEnabled']);
+            this.isGloballyEnabled = result.globallyEnabled !== false; // Default to true
+            
+            console.log('🔄 Settings loaded:', {
+                globallyEnabled: this.isGloballyEnabled,
+                autoLikes: this.settings.autoLikes,
+                autoComments: this.settings.autoComments,
+                persona: this.currentPersonaId
+            });
+            
         } catch (error) {
             console.error('Failed to load settings:', error);
+            // אם יש שגיאה, השאר את המצב הגלובלי כמופעל
+            this.isGloballyEnabled = true;
         }
     }
 
@@ -135,6 +151,16 @@ class SocialBotContentScript {
                 break;
             case 'PERSONA_CHANGED':
                 this.currentPersonaId = message.personaId;
+                break;
+            case 'TOGGLE_GLOBAL_STATE':
+                this.isGloballyEnabled = message.enabled;
+                console.log('🔄 Global state changed:', this.isGloballyEnabled ? 'ENABLED' : 'DISABLED');
+                if (!this.isGloballyEnabled) {
+                    // נקה את התורים בעת כיבוי
+                    this.commentQueue = [];
+                    this.processedPosts.clear();
+                    console.log('🛑 All queues cleared - Extension DISABLED');
+                }
                 break;
             case 'MANUAL_LIKE':
                 return this.executeManualLike();
@@ -297,11 +323,19 @@ class SocialBotContentScript {
 
     async handlePostVisible(postElement) {
         const postId = this.getPostId(postElement);
+        
+        // בדיקה אם התוסף מופעל גלובלית
+        if (!this.isGloballyEnabled) {
+            console.log('🛑 Extension globally disabled - skipping post processing');
+            return;
+        }
+        
         if (!postId || this.processedPosts.has(postId) || !this.isPlatformEnabled()) {
             console.log('Post skipped:', {
                 hasPostId: !!postId,
                 alreadyProcessed: this.processedPosts.has(postId),
                 platformEnabled: this.isPlatformEnabled(),
+                globallyEnabled: this.isGloballyEnabled,
                 currentPlatform: this.currentPlatform,
                 settings: this.settings
             });
@@ -387,6 +421,12 @@ class SocialBotContentScript {
     }
 
     async processAutoLike(postId, postElement) {
+        // בדיקה אם התוסף מופעל גלובלית
+        if (!this.isGloballyEnabled) {
+            console.log('🛑 Auto-like cancelled - extension disabled globally');
+            return;
+        }
+        
         const timer = this.viewTimers.get(postId);
         if (!timer || timer.likeProcessed) return;
         timer.likeProcessed = true;
@@ -564,6 +604,25 @@ class SocialBotContentScript {
     }
 
     async processAutoComment(postId, postElement) {
+        // בדיקה אם התוסף מופעל גלובלית
+        if (!this.isGloballyEnabled) {
+            console.log('🛑 Auto-comment cancelled - extension disabled globally');
+            return;
+        }
+        
+        // בדיקה אם כבר הגבתי לפוסט הזה (בזיכרון)
+        if (this.commentedPosts.has(postId)) {
+            console.log('💬 Already commented on this post (in memory), skipping:', postId.substring(0, 20) + '...');
+            return;
+        }
+
+        // בדיקה האם כבר יש תגובה שלי בפוסט (בדיקה ויזואלית)
+        if (this.hasMyExistingComment(postElement)) {
+            console.log('💬 Found existing comment from me, adding to memory and skipping:', postId.substring(0, 20) + '...');
+            this.commentedPosts.add(postId);
+            return;
+        }
+        
         const timer = this.viewTimers.get(postId);
         if (!timer || timer.commentProcessed) return;
         timer.commentProcessed = true;
@@ -590,439 +649,51 @@ class SocialBotContentScript {
         }
     }
 
-    async processCommentQueue() {
-        if (this.isProcessingQueue || this.commentQueue.length === 0) {
-            setTimeout(() => this.processCommentQueue(), 5000);
-            return;
-        }
-        this.isProcessingQueue = true;
-
+    hasMyExistingComment(postElement) {
         try {
-            const item = this.commentQueue.shift();
-            await this.generateAndPostComment(item);
-        } catch (error) {
-            console.error('Error processing comment queue:', error);
-        } finally {
-            this.isProcessingQueue = false;
-            setTimeout(() => this.processCommentQueue(), 3000);
-        }
-    }
+            // חיפוש תגובות בפוסט
+            const commentSelectors = [
+                '.comments-comment-item',
+                '[data-id*="comment"]',
+                '.feed-shared-comment',
+                '.comment',
+                '[class*="comment"]'
+            ];
 
-    async generateAndPostComment({ postId, postElement, postContent }) {
-        if (!this.currentPersonaId) {
-            console.log('💬 No persona selected, skipping comment generation');
-            return;
-        }
-
-        const startTime = Date.now();
-        const author = this.extractPostAuthor(postElement);
-        
-        try {
-            console.log('💬 Generating comment for post by:', author);
-            
-            const response = await chrome.runtime.sendMessage({
-                type: 'GENERATE_COMMENT',
-                data: { postContent, personaId: this.currentPersonaId }
-            });
-
-            if (response && response.success && response.comment) {
-                console.log('💬 Comment generated:', response.comment.substring(0, 50) + '...');
-                
-                const insertSuccess = await this.insertComment(postElement, response.comment);
-                
-                if (insertSuccess) {
-                    // רישום התגובה באנליטיקה
-                    this.sessionData.commentsPosted++;
-                    await this.recordComment(postElement, {
-                        text: response.comment,
-                        persona: this.currentPersonaId,
-                        responseTime: Date.now() - startTime
-                    });
-                    
-                    chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data: { comments: 1 } });
-                    console.log('💬 Successfully generated and posted comment for:', author);
-                } else {
-                    console.log('💬 Comment generated but failed to insert');
-                }
-            } else {
-                console.log('💬 Failed to generate comment:', response);
-            }
-        } catch (error) {
-            console.error('Error generating comment:', error);
-            await this.recordError(error, 'comment-generation', postElement);
-        }
-    }
-
-    async recordComment(postElement, commentData) {
-        if (!this.analyticsDB) return;
-        
-        try {
-            const postData = {
-                platform: this.currentPlatform,
-                postId: this.getPostId(postElement),
-                author: this.extractPostAuthor(postElement),
-                content: this.extractPostContent(postElement),
-                url: window.location.href,
-                authorProfile: this.extractAuthorProfile(postElement)
-            };
-
-            await this.analyticsDB.recordComment(postData, commentData);
-        } catch (error) {
-            console.error('Failed to record comment:', error);
-        }
-    }
-
-    async insertComment(postElement, commentText) {
-        try {
-            console.log('💬 Starting comment insertion process...');
-            
-            let commentBox = this.findCommentBox(postElement);
-            let attempts = 0;
-            const maxAttempts = 3;
-            
-            while (!commentBox && attempts < maxAttempts) {
-                attempts++;
-                console.log(`💬 Attempt ${attempts}: Looking for comment button...`);
-                
-                const commentButton = this.findCommentButton(postElement);
-                if (commentButton) {
-                    console.log('💬 Found comment button, clicking...');
-                    await this.simulateHumanClick(commentButton);
-                    
-                    // המתנה ארוכה יותר לפתיחת התיבה
-                    await this.sleep(1500 + (attempts * 500));
-                    
-                    // חיפוש מחדש בפוסט
-                    commentBox = this.findCommentBox(postElement);
-                    
-                    // אם עדיין לא נמצא, חפש בכל האזור הקרוב
-                    if (!commentBox) {
-                        commentBox = this.findCommentBoxNearPost(postElement);
+            for (const selector of commentSelectors) {
+                const comments = postElement.querySelectorAll(selector);
+                for (const comment of comments) {
+                    if (this.isMyComment(comment)) {
+                        console.log('💬 Found my existing comment in post');
+                        return true;
                     }
-                    if (commentBox) {
-                        console.log('💬 Comment box found after clicking!');
-                        break;
-                    } else {
-                        console.log('💬 Comment box still not found, trying again...');
-                        // נסה לחפש בכל המסמך
-                        commentBox = document.querySelector('.ql-editor[contenteditable="true"]');
-                        if (commentBox && this.isElementVisible(commentBox)) {
-                            console.log('💬 Found comment box in document');
-                            break;
-                        }
-                    }
-                } else {
-                    console.log('💬 No comment button found');
-                    break;
                 }
             }
-            
-            if (commentBox) {
-                console.log('💬 Comment box found, starting typing...');
-                const success = await this.typeInCommentBox(commentBox, commentText);
-                if (success) {
-                    const author = this.extractPostAuthor(postElement);
-                    this.addRealtimeActivity(`💬 כתבתי תגובה לפוסט של ${author}: "${commentText.substring(0, 50)}..."`);
-                    console.log('💬 Comment inserted successfully!');
-                    return true;
-                }
-            } else {
-                console.log('💬 Failed to find comment box after', attempts, 'attempts');
-                return false;
-            }
+
+            return false;
         } catch (error) {
-            console.error('Error inserting comment:', error);
-            await this.recordError(error, 'insert-comment', postElement);
+            console.error('Error checking for existing comments:', error);
             return false;
         }
     }
 
-    async typeInCommentBox(commentBox, text) {
+    isMyComment(commentElement) {
         try {
-            console.log('💬 Starting to type in comment box...');
-            
-            // מיקוד על התיבה
-            commentBox.focus();
-            commentBox.click();
-            await this.sleep(300);
-            
-            // ניקוי התיבה
-            if (commentBox.tagName === 'TEXTAREA' || commentBox.tagName === 'INPUT') {
-                commentBox.value = '';
-            } else {
-                commentBox.textContent = '';
-                commentBox.innerHTML = '';
-            }
-            
-            // הקלדה מדורגת
-            await this.simulateTyping(commentBox, text);
-            
-            // בדיקה שהטקסט נכתב
-            const finalText = commentBox.tagName === 'TEXTAREA' || commentBox.tagName === 'INPUT' 
-                ? commentBox.value 
-                : commentBox.textContent || commentBox.innerText;
-                
-            if (finalText.includes(text.substring(0, 10))) {
-                console.log('💬 Text successfully typed in comment box');
-                
-                // חיפוש כפתור שליחה
-                const submitButton = this.findSubmitButton(commentBox);
-                if (submitButton) {
-                    console.log('💬 Found submit button, clicking...');
-                    await this.sleep(500);
-                    await this.simulateHumanClick(submitButton);
-                    await this.sleep(1000);
-                    return true;
-                } else {
-                    console.log('💬 Comment typed but no submit button found - user needs to submit manually');
-                    return true;
-                }
-            } else {
-                console.log('💬 Failed to type text in comment box');
-                return false;
-            }
+            // בדיקות שונות לזיהוי התגובה שלי
+            const indicators = [
+                // חיפוש כפתור מחיקה/עריכה (רק בתגובות שלי)
+                commentElement.querySelector('[aria-label*="Delete"], [aria-label*="Edit"], [aria-label*="מחק"], [aria-label*="ערוך"]'),
+                // חיפוש אינדיקטור "You" או השם שלי
+                commentElement.querySelector('[data-test-id*="author-you"], .comment-author-you'),
+                // בדיקה אם יש תפריט פעולות (רק בתגובות שלי)
+                commentElement.querySelector('.comment-actions-menu, [data-test-id*="comment-overflow-menu"]')
+            ];
+
+            return indicators.some(indicator => indicator !== null);
         } catch (error) {
-            console.error('Error typing in comment box:', error);
+            console.error('Error checking if comment is mine:', error);
             return false;
         }
-    }
-
-    async simulateTyping(element, text) {
-        console.log('💬 Starting typing simulation for text:', text.substring(0, 30) + '...');
-        
-        const isTextArea = element.tagName === 'TEXTAREA' || element.tagName === 'INPUT';
-        const words = text.split(' ');
-        let typedText = '';
-
-        // הקלדה מדורגת של כמה מילים ראשונות
-        for (let i = 0; i < Math.min(5, words.length); i++) {
-            typedText += (i > 0 ? ' ' : '') + words[i];
-            
-            if (isTextArea) {
-                element.value = typedText;
-            } else {
-                element.textContent = typedText;
-                element.innerHTML = typedText;
-            }
-            
-            // שליחת אירועים שונים
-            element.dispatchEvent(new Event('input', { bubbles: true }));
-            element.dispatchEvent(new Event('keyup', { bubbles: true }));
-            
-            await this.sleep(200 + Math.random() * 300);
-        }
-
-        await this.sleep(800);
-        
-        // הכנסת הטקסט המלא
-        if (isTextArea) {
-            element.value = text;
-        } else {
-            element.textContent = text;
-            element.innerHTML = text;
-        }
-        
-        // שליחת אירועים מרובים לוודא שהשינוי נרשם
-        const events = ['input', 'change', 'keyup', 'blur', 'focus'];
-        for (const eventType of events) {
-            element.dispatchEvent(new Event(eventType, { bubbles: true }));
-            await this.sleep(50);
-        }
-        
-        console.log('💬 Typing simulation completed');
-        await this.sleep(500);
-    }
-
-    async handleReplyClick(replyButton) {
-        if (!this.settings.autoComments || !this.currentPersonaId) {
-            console.log('💬 Auto-comments disabled or no persona selected for reply');
-            return;
-        }
-
-        try {
-            console.log('💬 Processing reply click...');
-            
-            const commentElement = this.findParentComment(replyButton);
-            const postElement = this.findParentPost(replyButton);
-            
-            if (!commentElement || !postElement) {
-                console.log('💬 Could not find parent comment or post element');
-                return;
-            }
-
-            const replyContext = this.extractCommentContent(commentElement);
-            const postContent = this.extractPostContent(postElement);
-
-            if (!replyContext || !postContent) {
-                console.log('💬 Could not extract reply context or post content');
-                return;
-            }
-
-            console.log('💬 Generating reply to comment:', replyContext.substring(0, 50) + '...');
-
-            const response = await chrome.runtime.sendMessage({
-                type: 'GENERATE_COMMENT',
-                data: { postContent, replyContext, personaId: this.currentPersonaId }
-            });
-
-            if (response && response.success && response.comment) {
-                console.log('💬 Reply generated:', response.comment.substring(0, 50) + '...');
-                
-                await this.sleep(1000);
-                let replyBox = this.findReplyBox(commentElement);
-                
-                // אם לא נמצאה תיבת תגובה, נסה לחפש בכל המסמך
-                if (!replyBox) {
-                    replyBox = document.querySelector('.ql-editor[contenteditable="true"]');
-                    if (replyBox && this.isElementVisible(replyBox)) {
-                        console.log('💬 Found reply box in document');
-                    }
-                }
-                
-                if (replyBox) {
-                    const success = await this.typeInCommentBox(replyBox, response.comment);
-                    if (success) {
-                        console.log('💬 Reply posted successfully');
-                        this.addRealtimeActivity(`💬 השבתי לתגובה: "${response.comment.substring(0, 50)}..."`);
-                    }
-                } else {
-                    console.log('💬 Could not find reply box');
-                }
-            } else {
-                console.log('💬 Failed to generate reply:', response);
-            }
-        } catch (error) {
-            console.error('Error handling reply:', error);
-            await this.recordError(error, 'handle-reply');
-        }
-    }
-
-    // Platform-specific selectors
-    findLikeButton(postElement) {
-        if (this.currentPlatform === 'linkedin') {
-            // מחפש כפתורי לייק עם סלקטורים מורחבים
-            const selectors = [
-                'button[aria-label*="Like"]',
-                'button[aria-label*="לייק"]',
-                'button[data-control-name="like"]',
-                'button.react-button__trigger[aria-label*="Like"]',
-                '.social-actions-button[aria-label*="Like"]',
-                'button.social-action[aria-label*="Like"]',
-                'button[aria-label^="Like "]',
-                'button.social-actions-button--like'
-            ];
-            
-            for (const selector of selectors) {
-                const button = postElement.querySelector(selector);
-                if (button) {
-                    console.log('Found like button with selector:', selector);
-                    return button;
-                }
-            }
-        } else if (this.currentPlatform === 'facebook') {
-            return postElement.querySelector('div[aria-label*="Like"], div[role="button"][aria-label*="Like"]');
-        }
-        return null;
-    }
-
-    findCommentButton(postElement) {
-        if (this.currentPlatform === 'linkedin') {
-            const selectors = [
-                'button[aria-label*="Comment"]',
-                'button[aria-label*="תגובה"]', 
-                'button[data-control-name="comment"]',
-                'button.social-actions-button[aria-label*="Comment"]',
-                '.comment-button',
-                'button[aria-label^="Comment "]',
-                'button.social-action[aria-label*="Comment"]',
-                'button.react-button__trigger[aria-label*="Comment"]'
-            ];
-            
-            for (const selector of selectors) {
-                const button = postElement.querySelector(selector);
-                if (button) {
-                    console.log('💬 Found comment button with selector:', selector);
-                    return button;
-                }
-            }
-        } else if (this.currentPlatform === 'facebook') {
-            return postElement.querySelector('div[aria-label*="Comment"], div[role="button"]:contains("Comment")');
-        }
-        return null;
-    }
-
-    findCommentBox(postElement) {
-        if (this.currentPlatform === 'linkedin') {
-            const selectors = [
-                '.ql-editor[contenteditable="true"]',
-                '.comment-texteditor',
-                'textarea[placeholder*="comment"]',
-                'textarea[placeholder*="תגובה"]',
-                'div[contenteditable="true"][role="textbox"]',
-                '.comments-comment-texteditor .ql-editor',
-                '.comments-comment-box .ql-editor',
-                'div[data-placeholder*="comment"]',
-                '.artdeco-text-input--input'
-            ];
-            
-            for (const selector of selectors) {
-                const box = postElement.querySelector(selector);
-                if (box) {
-                    console.log('💬 Found comment box with selector:', selector);
-                    return box;
-                }
-            }
-            
-            // חיפוש גם בכל המסמך אם לא נמצא בפוסט
-            for (const selector of selectors) {
-                const box = document.querySelector(selector);
-                if (box && this.isElementVisible(box)) {
-                    console.log('💬 Found comment box in document with selector:', selector);
-                    return box;
-                }
-            }
-        } else if (this.currentPlatform === 'facebook') {
-            return postElement.querySelector('div[contenteditable="true"][data-testid="comment-input"]');
-        }
-        return null;
-    }
-
-    findReplyBox(commentElement) {
-        if (this.currentPlatform === 'linkedin') {
-            return commentElement.querySelector('.ql-editor, textarea[placeholder*="reply"], textarea[placeholder*="השב"]');
-        } else if (this.currentPlatform === 'facebook') {
-            return commentElement.querySelector('div[contenteditable="true"][data-testid="reply-input"]');
-        }
-        return null;
-    }
-
-    findCommentBoxNearPost(postElement) {
-        try {
-            // חיפוש בכל האזור מתחת לפוסט
-            const postContainer = postElement.closest('.feed-shared-update-v2, .occludable-update');
-            if (postContainer) {
-                const nextSibling = postContainer.nextElementSibling;
-                if (nextSibling) {
-                    const commentBox = nextSibling.querySelector('.ql-editor[contenteditable="true"]');
-                    if (commentBox) {
-                        console.log('💬 Found comment box near post');
-                        return commentBox;
-                    }
-                }
-            }
-            
-            // חיפוש בכל תיבות התגובות הגלויות
-            const visibleCommentBoxes = document.querySelectorAll('.ql-editor[contenteditable="true"]');
-            for (const box of visibleCommentBoxes) {
-                if (this.isElementVisible(box) && box.offsetHeight > 0) {
-                    console.log('💬 Found visible comment box in document');
-                    return box;
-                }
-            }
-        } catch (error) {
-            console.error('Error finding comment box near post:', error);
-        }
-        return null;
     }
 
     findSubmitButton(commentBox) {
