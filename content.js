@@ -131,10 +131,11 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             isInitialized = true;
             console.log('✅ SocialBot initialized successfully');
             
-            // התחלה אוטומטית אם מופעל
+            // התחלה אוטומטית אם מופעל גלובלית - אבל לא גלילה אוטומטית
             if (settings.globallyEnabled) {
                 setTimeout(() => {
                     if (socialBotInstance) {
+                        console.log('🚀 Starting bot (without auto-scroll unless explicitly enabled)');
                         socialBotInstance.start();
                     }
                 }, 2000);
@@ -172,19 +173,23 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
     // 🔄 Load Settings on Startup
     chrome.storage.sync.get([
         'globallyEnabled',
-        'autoLike', 
-        'autoComment',
+        'autoLikes', 
+        'autoComments',
         'autoScroll',
         'scrollSpeed',
-        'language'
+        'language',
+        'linkedinEnabled',
+        'facebookEnabled'
     ]).then(stored => {
         settings = {
             globallyEnabled: stored.globallyEnabled !== false,
-            autoLike: stored.autoLike !== false,
-            autoComment: stored.autoComment !== false,
+            autoLikes: stored.autoLikes !== false,
+            autoComments: stored.autoComments !== false,
             autoScroll: stored.autoScroll !== false,
             scrollSpeed: stored.scrollSpeed || 2,
-            language: stored.language || 'he'
+            language: stored.language || 'he',
+            linkedinEnabled: stored.linkedinEnabled !== false,
+            facebookEnabled: stored.facebookEnabled !== false
         };
         
         console.log('✅ Content script settings loaded:', settings);
@@ -199,6 +204,17 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
     }).catch(error => {
         console.error('❌ Error loading settings:', error);
         // אתחול עם הגדרות ברירת מחדל
+        settings = {
+            globallyEnabled: true,
+            autoLikes: true,
+            autoComments: false,
+            autoScroll: false,
+            scrollSpeed: 2,
+            language: 'he',
+            linkedinEnabled: true,
+            facebookEnabled: true
+        };
+        
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', initializeBot);
         } else {
@@ -389,20 +405,41 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
 
         async loadSettings() {
             try {
-                const response = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-                if (response && response.success) {
-                    this.settings = response.settings;
-                    this.currentPersonaId = response.settings.selectedPersonaId;
-                }
+                // טעינת הגדרות ישירות מ-storage
+                const stored = await chrome.storage.sync.get([
+                    'globallyEnabled',
+                    'autoLikes',
+                    'autoComments',
+                    'autoScroll',
+                    'scrollSpeed',
+                    'linkedinEnabled',
+                    'facebookEnabled',
+                    'preferHeartReaction',
+                    'language',
+                    'currentPersonaId',
+                    'autoScrollEnabled',
+                    'autoScrollSpeed'
+                ]);
+
+                this.settings = {
+                    globallyEnabled: stored.globallyEnabled !== false,
+                    autoLikes: stored.autoLikes !== false,
+                    autoComments: stored.autoComments !== false,
+                    autoScroll: stored.autoScroll !== false,
+                    scrollSpeed: stored.scrollSpeed || 2,
+                    linkedinEnabled: stored.linkedinEnabled !== false,
+                    facebookEnabled: stored.facebookEnabled !== false,
+                    preferHeartReaction: stored.preferHeartReaction !== false,
+                    language: stored.language || 'he'
+                };
+
+                this.currentPersonaId = stored.currentPersonaId;
+                this.isGloballyEnabled = this.settings.globallyEnabled;
+                this.autoScrollEnabled = stored.autoScrollEnabled || false;
+                this.autoScrollSpeed = stored.autoScrollSpeed || 1;
                 
-                // טעינת המצב הגלובלי
-                const result = await chrome.storage.sync.get(['globallyEnabled']);
-                this.isGloballyEnabled = result.globallyEnabled !== false; // Default to true
-                
-                // טעינת הגדרות גלילה אוטומטית
-                const scrollResult = await chrome.storage.sync.get(['autoScrollEnabled', 'autoScrollSpeed']);
-                this.autoScrollEnabled = scrollResult.autoScrollEnabled || false;
-                this.autoScrollSpeed = scrollResult.autoScrollSpeed || 1;
+                // עדכון הגדרות גלובליות
+                settings = { ...this.settings };
                 
                 console.log('🔄 Settings loaded:', {
                     globallyEnabled: this.isGloballyEnabled,
@@ -417,6 +454,17 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 console.error('Failed to load settings:', error);
                 // אם יש שגיאה, השאר את המצב הגלובלי כמופעל
                 this.isGloballyEnabled = true;
+                this.settings = {
+                    globallyEnabled: true,
+                    autoLikes: true,
+                    autoComments: false,
+                    autoScroll: false,
+                    scrollSpeed: 2,
+                    linkedinEnabled: true,
+                    facebookEnabled: true,
+                    preferHeartReaction: false,
+                    language: 'he'
+                };
             }
         }
 
@@ -430,13 +478,31 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         handleMessage(message) {
             switch (message.type) {
                 case 'SETTINGS_CHANGED':
-                    this.settings = { ...this.settings, ...message.settings };
+                case 'SYNC_SETTINGS':
+                    if (message.settings) {
+                        this.settings = { ...this.settings, ...message.settings };
+                        this.isGloballyEnabled = this.settings.globallyEnabled;
+                        
+                        // עדכון הגדרות גלובליות
+                        settings = { ...this.settings };
+                        
+                        console.log('🔄 Settings synced:', this.settings);
+                        
+                        // אם התוסף נכבה, עצור את כל הפעילויות
+                        if (!this.isGloballyEnabled) {
+                            this.commentQueue = [];
+                            this.processedPosts.clear();
+                            this.stopAutoScroll();
+                            console.log('🛑 All activities stopped - Extension DISABLED');
+                        }
+                    }
                     break;
                 case 'PERSONA_CHANGED':
                     this.currentPersonaId = message.personaId;
                     break;
                 case 'TOGGLE_GLOBAL_STATE':
                     this.isGloballyEnabled = message.enabled;
+                    this.settings.globallyEnabled = message.enabled;
                     console.log('🔄 Global state changed:', this.isGloballyEnabled ? 'ENABLED' : 'DISABLED');
                     if (!this.isGloballyEnabled) {
                         // נקה את התורים בעת כיבוי
@@ -450,7 +516,7 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     this.autoScrollEnabled = message.enabled;
                     this.autoScrollSpeed = message.speed || 1;
                     console.log('📜 Auto-scroll state changed:', this.autoScrollEnabled ? 'ENABLED' : 'DISABLED', 'Speed:', this.autoScrollSpeed);
-                    if (this.autoScrollEnabled) {
+                    if (this.autoScrollEnabled && this.isGloballyEnabled) {
                         this.startAutoScroll();
                     } else {
                         this.stopAutoScroll();
@@ -460,6 +526,12 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     return this.executeManualLike();
                 case 'MANUAL_COMMENT':
                     return this.executeManualComment();
+                case 'PING':
+                    return { status: 'ready', platform: this.platform };
+                case 'FORCE_REINIT':
+                    console.log('🔄 Force reinitialization requested');
+                    this.init();
+                    break;
             }
         }
 
@@ -1503,6 +1575,11 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 return;
             }
             
+            if (!this.autoScrollEnabled) {
+                console.log('🛑 Cannot start auto-scroll - auto-scroll disabled');
+                return;
+            }
+            
             if (this.isAutoScrolling) {
                 console.log('📜 Auto-scroll already running');
                 return;
@@ -1544,7 +1621,7 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         }
 
         performAutoScroll() {
-            if (!this.isAutoScrolling || !this.isGloballyEnabled) return;
+            if (!this.isAutoScrolling || !this.isGloballyEnabled || !this.autoScrollEnabled) return;
             
             if (this.scrollPausedForPost || this.waitingForUserAction) {
                 // אם מחכים לפעולת משתמש, בדוק שוב בעוד זמן קצר
@@ -1761,9 +1838,12 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             console.log('🚀 Starting SocialBot Pro...');
             this.isRunning = true;
             
-            // התחלת הפעילות לפי הגדרות
-            if (this.settings.autoScroll) {
+            // התחלת הפעילות לפי הגדרות - רק אם גלילה אוטומטית מופעלת במפורש
+            if (this.autoScrollEnabled && this.settings.autoScroll) {
+                console.log('📜 Auto-scroll is enabled, starting...');
                 this.startAutoScroll();
+            } else {
+                console.log('📜 Auto-scroll disabled or not enabled by user');
             }
             
             console.log('✅ SocialBot Pro started successfully');

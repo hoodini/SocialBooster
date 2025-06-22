@@ -175,11 +175,14 @@ class SocialBotPopup {
                 type: 'SYNC_SETTINGS',
                 settings: {
                     globallyEnabled: this.settings.globallyEnabled,
-                    autoLike: this.settings.autoLike,
-                    autoComment: this.settings.autoComment,
+                    autoLikes: this.settings.autoLikes,
+                    autoComments: this.settings.autoComments,
                     autoScroll: this.settings.autoScroll,
                     scrollSpeed: this.settings.scrollSpeed,
-                    language: this.settings.language
+                    language: this.settings.language,
+                    linkedinEnabled: this.settings.linkedinEnabled,
+                    facebookEnabled: this.settings.facebookEnabled,
+                    preferHeartReaction: this.settings.preferHeartReaction
                 }
             });
             console.log('✅ Settings synced to tab');
@@ -796,9 +799,12 @@ class SocialBotPopup {
             // עדכון toggles לפי הגדרות
             const elements = {
                 'globalToggle': this.settings.globallyEnabled,
-                'autoLike': this.settings.autoLike,
-                'autoComment': this.settings.autoComment,
-                'autoScroll': this.settings.autoScroll
+                'autoLikes': this.settings.autoLikes,
+                'autoComments': this.settings.autoComments,
+                'autoScroll': this.settings.autoScroll,
+                'preferHeartReaction': this.settings.preferHeartReaction,
+                'linkedinEnabled': this.settings.linkedinEnabled,
+                'facebookEnabled': this.settings.facebookEnabled
             };
             
             Object.entries(elements).forEach(([id, checked]) => {
@@ -1075,20 +1081,26 @@ class SocialBotPopup {
         try {
             const stored = await chrome.storage.sync.get([
                 'globallyEnabled',
-                'autoLike', 
-                'autoComment',
+                'autoLikes', 
+                'autoComments',
                 'autoScroll',
                 'scrollSpeed',
-                'language'
+                'language',
+                'linkedinEnabled',
+                'facebookEnabled',
+                'preferHeartReaction'
             ]);
             
             this.settings = {
                 globallyEnabled: stored.globallyEnabled !== false, // ברירת מחדל: מופעל
-                autoLike: stored.autoLike !== false,
-                autoComment: stored.autoComment !== false,
+                autoLikes: stored.autoLikes !== false,
+                autoComments: stored.autoComments !== false,
                 autoScroll: stored.autoScroll !== false,
                 scrollSpeed: stored.scrollSpeed || 2,
-                language: stored.language || 'he'
+                language: stored.language || 'he',
+                linkedinEnabled: stored.linkedinEnabled !== false,
+                facebookEnabled: stored.facebookEnabled !== false,
+                preferHeartReaction: stored.preferHeartReaction !== false
             };
             
             console.log('📋 Settings loaded:', this.settings);
@@ -1098,11 +1110,14 @@ class SocialBotPopup {
             // הגדרות ברירת מחדל
             this.settings = {
                 globallyEnabled: true,
-                autoLike: true,
-                autoComment: true,
-                autoScroll: true,
+                autoLikes: true,
+                autoComments: false,
+                autoScroll: false,
                 scrollSpeed: 2,
-                language: 'he'
+                language: 'he',
+                linkedinEnabled: true,
+                facebookEnabled: true,
+                preferHeartReaction: false
             };
         }
     }
