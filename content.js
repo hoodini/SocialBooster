@@ -307,16 +307,36 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     return;
                 }
                 
-                // טעינת הסקריפט של בסיס הנתונים
+                // טעינת הסקריפט של בסיס הנתונים עם fetch במקום script tag
                 console.log('Loading db.js script...');
+                try {
+                    const response = await fetch(chrome.runtime.getURL('db.js'));
+                    const scriptText = await response.text();
+                    
+                    // הרצת הקוד ישירות
+                    eval(scriptText);
+                    
+                    // המתנה קצרה לוודא שהמחלקה נטענה
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    
+                    if (window.SocialBotDB) {
+                        console.log('✅ SocialBotDB class loaded successfully via fetch');
+                        this.db = new window.SocialBotDB();
+                        await this.db.init();
+                        console.log('Analytics DB initialized successfully');
+                        return;
+                    }
+                } catch (fetchError) {
+                    console.log('Fetch method failed, trying script tag method...', fetchError);
+                }
+                
+                // אם fetch נכשל, נסה עם script tag
                 const script = document.createElement('script');
                 script.src = chrome.runtime.getURL('db.js');
-                document.head.appendChild(script);
                 
-                // המתנה לטעינת הסקריפט עם timeout
                 await new Promise((resolve, reject) => {
                     let attempts = 0;
-                    const maxAttempts = 10;
+                    const maxAttempts = 15;
                     
                     const checkLoaded = () => {
                         attempts++;
@@ -329,18 +349,23 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                             console.log('❌ SocialBotDB class not found after max attempts');
                             reject(new Error('SocialBotDB class not available after loading script'));
                         } else {
-                            setTimeout(checkLoaded, 200);
+                            setTimeout(checkLoaded, 300);
                         }
                     };
                     
                     script.onload = () => {
                         console.log('db.js script loaded, checking for class...');
-                        setTimeout(checkLoaded, 100);
+                        setTimeout(checkLoaded, 200);
                     };
                     
                     script.onerror = () => {
                         reject(new Error('Failed to load db.js script'));
                     };
+                    
+                    document.head.appendChild(script);
+                    
+                    // התחל בדיקה גם ללא onload
+                    setTimeout(checkLoaded, 500);
                 });
                 
                 // יצירת המופע
@@ -621,6 +646,56 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 });
             } catch (error) {
                 console.error('Error checking for reply buttons:', error);
+            }
+        }
+
+        async handleReplyClick(replyButton) {
+            try {
+                console.log('💬 Handling reply button click...');
+                
+                // מצא את הפוסט או התגובה שמשיבים אליה
+                const parentPost = this.findParentPost(replyButton);
+                const parentComment = this.findParentComment(replyButton);
+                
+                if (!parentPost) {
+                    console.log('❌ Could not find parent post for reply');
+                    return;
+                }
+                
+                // חכה שתיבת התגובה תיפתח
+                await this.sleep(1000);
+                
+                const commentBox = this.findCommentBox(parentPost);
+                if (!commentBox) {
+                    console.log('❌ Could not find comment box after reply click');
+                    return;
+                }
+                
+                // בדוק אם יש פרסונה פעילה
+                if (!this.currentPersonaId) {
+                    console.log('❌ No active persona for auto-reply');
+                    return;
+                }
+                
+                // הפק תגובה
+                const postContent = this.extractPostContent(parentPost);
+                const postAuthor = this.extractPostAuthor(parentPost);
+                
+                let contextContent = postContent;
+                if (parentComment) {
+                    contextContent += '\n\nתגובה מקורית: ' + this.extractCommentContent(parentComment);
+                }
+                
+                const comment = await this.generateComment(contextContent, postAuthor, this.currentPersonaId);
+                
+                if (comment) {
+                    await this.typeInCommentBox(commentBox, comment, parentPost);
+                } else {
+                    console.log('❌ Failed to generate reply comment');
+                }
+                
+            } catch (error) {
+                console.error('Error handling reply click:', error);
             }
         }
 
@@ -924,7 +999,10 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                         const author = this.extractPostAuthor(postElement);
                         this.addRealtimeActivity(`❤️ נתתי לב אהבה לפוסט של ${author}`);
                         
-                        chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data: { likes: 1 } });
+                        // עדכון סטטיסטיקות אם ההקשר תקף
+                        if (chrome.runtime?.id) {
+                            chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data: { likes: 1 } });
+                        }
                         console.log('❤️ Successfully auto-hearted post:', postId);
                         return;
                     }
@@ -941,7 +1019,10 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     this.sessionData.likesGiven++;
                     await this.recordLike(postElement);
                     
-                    chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data: { likes: 1 } });
+                    // עדכון סטטיסטיקות אם ההקשר תקף
+                    if (chrome.runtime?.id) {
+                        chrome.runtime.sendMessage({ type: 'UPDATE_STATS', data: { likes: 1 } });
+                    }
                     console.log('Successfully auto-liked post:', postId);
                 } else {
                     console.log('Like may not have been registered for post:', postId);
@@ -1049,6 +1130,12 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         // הוספת פעילות זמן-אמת
         addRealtimeActivity(text) {
             try {
+                // בדיקה אם ההקשר של התוסף עדיין תקף
+                if (!chrome.runtime?.id) {
+                    console.log('Extension context invalidated, cannot send realtime activity');
+                    return;
+                }
+                
                 chrome.runtime.sendMessage({
                     type: 'REALTIME_ACTIVITY',
                     data: {
@@ -1989,6 +2076,12 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             try {
                 console.log('🤖 Generating comment for post by:', author);
                 
+                // בדיקה אם ההקשר של התוסף עדיין תקף
+                if (!chrome.runtime?.id) {
+                    console.error('Extension context invalidated, cannot generate comment');
+                    return null;
+                }
+                
                 const response = await chrome.runtime.sendMessage({
                     type: 'GENERATE_COMMENT',
                     postContent: postContent,
@@ -2004,6 +2097,9 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 }
             } catch (error) {
                 console.error('Error generating comment:', error);
+                if (error.message.includes('Extension context invalidated')) {
+                    console.log('Extension was reloaded, comment generation unavailable');
+                }
                 return null;
             }
         }
