@@ -211,15 +211,54 @@ class SocialBotContentScript {
             return socialBotInstance;
         }
         
+        // Core state
         this.isRunning = false;
         this.isProcessing = false;
         this.autoScrollActive = false;
         this.platform = this.detectPlatform();
         this.settings = { ...settings }; // Copy global settings
+        
+        // Post tracking
         this.processedPosts = new Set();
+        this.commentedPosts = new Set();
+        this.viewTimers = new Map();
+        this.observedElements = new WeakSet();
+        
+        // Comment system
         this.commentQueue = [];
+        this.isProcessingQueue = false;
+        
+        // Scroll tracking
+        this.isScrolling = false;
+        this.lastScrollTime = 0;
+        this.scrollTimeout = null;
+        
+        // Auto-scroll functionality
+        this.autoScrollEnabled = false;
+        this.isAutoScrolling = false;
+        this.currentScrollPosition = 0;
+        this.scrollPausedForPost = false;
+        this.waitingForUserAction = false;
+        this.autoScrollSpeed = 1;
+        this.scrollPauseTimeout = null;
+        this.pendingScrollContinue = null;
+        
+        // Session tracking
         this.sessionId = Date.now();
+        this.sessionData = {
+            startTime: Date.now(),
+            postsViewed: 0,
+            likesGiven: 0,
+            commentsPosted: 0,
+            scrollDistance: 0
+        };
+        
+        // Database
         this.db = null;
+        
+        // Settings
+        this.currentPersonaId = null;
+        this.isGloballyEnabled = true;
         
         this.init();
         return this;
@@ -1661,6 +1700,30 @@ class SocialBotContentScript {
             } else if (!this.settings.autoScroll && this.autoScrollActive) {
                 this.stopAutoScroll();
             }
+        }
+    }
+
+    async processCommentQueue() {
+        // עיבוד תור התגובות
+        if (this.isProcessingQueue || this.commentQueue.length === 0) {
+            return;
+        }
+        
+        this.isProcessingQueue = true;
+        console.log('🔄 Processing comment queue...');
+        
+        try {
+            while (this.commentQueue.length > 0) {
+                const commentTask = this.commentQueue.shift();
+                if (commentTask && commentTask.postElement) {
+                    await this.processAutoComment(commentTask.postId, commentTask.postElement);
+                    await this.sleep(2000); // המתנה בין תגובות
+                }
+            }
+        } catch (error) {
+            console.error('❌ Error processing comment queue:', error);
+        } finally {
+            this.isProcessingQueue = false;
         }
     }
 } 

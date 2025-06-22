@@ -95,28 +95,37 @@ class SocialBotPopup {
     async connectToActiveTab() {
         try {
             const activeTab = await this.getActiveTab();
-            if (!activeTab) return;
+            if (!activeTab) {
+                console.log('ℹ️ No active social media tab found');
+                this.showStatus('פתח דף LinkedIn או Facebook כדי להתחיל', 'info');
+                return;
+            }
             
-            console.log('🔗 Connecting to active tab:', activeTab.id);
+            console.log('🔗 Connecting to active tab:', activeTab.id, activeTab.url);
             
             // ניסיון חיבור לטאב
             const response = await chrome.tabs.sendMessage(activeTab.id, {
                 type: 'PING'
             });
             
+            console.log('📡 PING response:', response);
+            
             if (response && response.status === 'ready') {
                 console.log('✅ Connected to content script');
-                this.showStatus('מחובר ומוכן לפעולה', 'success');
+                this.showStatus('מחובר ומוכן לפעולה ✅', 'success');
                 
                 // שליחת הגדרות נוכחיות
                 await this.syncSettingsToTab(activeTab.id);
+                
+                // עדכון סטטוס חיבור
+                this.lastSuccessfulConnection = Date.now();
                 
             } else {
                 throw new Error('Content script not ready');
             }
             
         } catch (error) {
-            console.log('ℹ️ Content script not loaded, attempting injection...');
+            console.log('ℹ️ Content script not loaded, attempting injection...', error.message);
             await this.injectContentScript();
         }
     }
@@ -867,12 +876,15 @@ class SocialBotPopup {
         try {
             console.log('🔄 Toggling global state to:', enabled);
             
+            // עדכון UI מיידי
+            this.updateGlobalToggleUI(enabled);
+            
             // שמירה ב-storage
             await chrome.storage.sync.set({ globallyEnabled: enabled });
             console.log('✅ Global state saved to storage');
             
-            // עדכון ה-UI
-            this.updateGlobalToggleUI(enabled);
+            // עדכון הגדרות מקומיות
+            this.settings.globallyEnabled = enabled;
             
             // שליחת הודעה לכל הטאבים הפעילים
             try {
@@ -882,12 +894,12 @@ class SocialBotPopup {
                 for (const tab of tabs) {
                     if (tab.url && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
                         try {
-                            await chrome.tabs.sendMessage(tab.id, {
+                            const response = await chrome.tabs.sendMessage(tab.id, {
                                 type: 'TOGGLE_GLOBAL_STATE',
                                 enabled: enabled
                             });
                             successCount++;
-                            console.log(`✅ Message sent to tab ${tab.id}`);
+                            console.log(`✅ Message sent to tab ${tab.id}:`, response);
                         } catch (tabError) {
                             console.log(`ℹ️ Could not send message to tab ${tab.id}:`, tabError.message);
                             // זה נורמלי - לא כל הטאבים יש בהם content script
@@ -902,19 +914,40 @@ class SocialBotPopup {
                 // לא חשוב מספיק כדי להכשיל את כל הפעולה
             }
             
-            // הודעת סטטוס
+            // הודעת סטטוס מפורטת
             const statusMessage = enabled ? 
                 '✅ התוסף הופעל - פעילות אוטומטית מתחילה' : 
                 '🛑 התוסף כובה - כל הפעילות האוטומטית הופסקה';
             
             this.showStatus(statusMessage, enabled ? 'success' : 'warning');
             
+            // ניסיון לקבל עדכון סטטוס מהטאב הפעיל
+            setTimeout(async () => {
+                try {
+                    const activeTab = await this.getActiveTab();
+                    if (activeTab) {
+                        const statusResponse = await chrome.tabs.sendMessage(activeTab.id, {
+                            type: 'GET_STATUS'
+                        });
+                        if (statusResponse && statusResponse.status) {
+                            this.updateStatusDisplay(statusResponse.status);
+                        }
+                    }
+                } catch (error) {
+                    console.log('Could not get status update:', error.message);
+                }
+            }, 1000);
+            
             console.log('🔄 Global state change completed successfully');
             
         } catch (error) {
             console.error('❌ Error in toggleGlobalState:', error);
             
-            // ניסיון לזהות את סוג השגיאה
+            // החזר את המתג למצב הקודם
+            document.getElementById('globalToggle').checked = !enabled;
+            this.updateGlobalToggleUI(!enabled);
+            
+            // הודעת שגיאה מפורטת
             if (error.message && error.message.includes('storage')) {
                 this.showStatus('שגיאה בשמירת הגדרות - נסה שוב', 'error');
             } else if (error.message && error.message.includes('tabs')) {
@@ -922,10 +955,6 @@ class SocialBotPopup {
             } else {
                 this.showStatus('שגיאה כללית - נסה לרענן את הדף', 'error');
             }
-            
-            // החזר את המתג למצב הקודם
-            document.getElementById('globalToggle').checked = !enabled;
-            this.updateGlobalToggleUI(!enabled);
         }
     }
 
