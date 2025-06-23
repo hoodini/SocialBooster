@@ -5,22 +5,22 @@ class YuvAISocialBotPro {
     constructor() {
         this.isActive = false;
         this.settings = {};
-        this.aiAgentsSystem = null;
+        this.smartAgentsSystem = null;  // 🧠 מערכת סוכנים חכמים עם AI
         this.visualization = null;
         this.platform = this.detectPlatform();
         this.extensionId = chrome.runtime.id;
         
-        console.log('🚀 YUV.AI SocialBot Pro initializing...');
+        console.log('🧠 YUV.AI SocialBot Pro initializing with Smart AI Agents...');
         this.init();
     }
 
     async init() {
         try {
-            // Wait for AI Agents System to be available
-            await this.waitForAIAgentsSystem();
+            // Wait for Smart AI Agents System to be available
+            await this.waitForSmartAIAgentsSystem();
             
-            // Initialize AI Agents System
-            this.aiAgentsSystem = new AIAgentsSystem();
+            // Initialize Smart AI Agents System 🧠
+            this.smartAgentsSystem = new AISmartAgentsSystem();
             
             // Initialize visualization first
             await this.initializeVisualization();
@@ -31,33 +31,33 @@ class YuvAISocialBotPro {
             // Load settings
             await this.loadSettings();
             
-            // Setup AI Agents with visualization and settings
-            this.aiAgentsSystem.setVisualization(this.visualization);
-            this.aiAgentsSystem.setSettings(this.settings);
+            // Setup Smart AI Agents with visualization and settings
+            this.smartAgentsSystem.setVisualization(this.visualization);
+            this.smartAgentsSystem.setSettings(this.settings);
             
             // Start the system if enabled
             if (this.settings.globallyEnabled) {
                 await this.start();
             }
             
-            console.log('✅ YUV.AI SocialBot Pro initialized successfully');
+            console.log('✅ YUV.AI SocialBot Pro with Smart AI Agents initialized successfully');
             
         } catch (error) {
             console.error('❌ Failed to initialize YUV.AI SocialBot Pro:', error);
         }
     }
 
-    async waitForAIAgentsSystem() {
+    async waitForSmartAIAgentsSystem() {
         let attempts = 0;
         const maxAttempts = 50; // 5 seconds
         
-        while (!window.AIAgentsSystem && attempts < maxAttempts) {
+        while (!window.AISmartAgentsSystem && attempts < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
         }
         
-        if (!window.AIAgentsSystem) {
-            throw new Error('AI Agents System not loaded');
+        if (!window.AISmartAgentsSystem) {
+            throw new Error('Smart AI Agents System not loaded');
         }
     }
 
@@ -153,9 +153,9 @@ class YuvAISocialBotPro {
         
         console.log('✅ Settings synced from popup:', this.settings);
         
-        // Update AI Agents with new settings
-        if (this.aiAgentsSystem) {
-            this.aiAgentsSystem.setSettings(this.settings);
+        // Update Smart AI Agents with new settings
+        if (this.smartAgentsSystem) {
+            this.smartAgentsSystem.setSettings(this.settings);
         }
         
         // Handle auto-scroll toggle
@@ -176,15 +176,17 @@ class YuvAISocialBotPro {
     }
 
     async handleAutoScrollChange() {
-        if (!this.aiAgentsSystem) return;
+        if (!this.smartAgentsSystem) return;
         
-        const scrollAgent = this.aiAgentsSystem.agents.get('scrollAgent');
-        if (!scrollAgent) return;
+        const scrollDecisionAgent = this.smartAgentsSystem.agents.get('scrollDecisionAgent');
+        if (!scrollDecisionAgent) return;
         
         if (this.settings.autoScroll && this.isActive) {
-            await scrollAgent.start();
+            await scrollDecisionAgent.start();
+            this.startSmartScrolling();
         } else {
-            await scrollAgent.stop();
+            await scrollDecisionAgent.stop();
+            this.stopSmartScrolling();
         }
     }
 
@@ -255,9 +257,9 @@ class YuvAISocialBotPro {
             this.visualization.setSystemStatus('פעילה');
         }
         
-        // Start AI Agents System
-        if (this.aiAgentsSystem) {
-            await this.aiAgentsSystem.start();
+        // Start Smart AI Agents System 🧠
+        if (this.smartAgentsSystem) {
+            await this.smartAgentsSystem.start();
         }
         
         console.log('✅ YUV.AI SocialBot Pro Started Successfully');
@@ -274,9 +276,9 @@ class YuvAISocialBotPro {
             this.visualization.setSystemStatus('לא פעילה');
         }
         
-        // Stop AI Agents System
-        if (this.aiAgentsSystem) {
-            await this.aiAgentsSystem.stop();
+        // Stop Smart AI Agents System
+        if (this.smartAgentsSystem) {
+            await this.smartAgentsSystem.stop();
         }
         
         console.log('✅ YUV.AI SocialBot Pro Stopped Successfully');
@@ -298,6 +300,79 @@ class YuvAISocialBotPro {
         }
         
         return baseStatus;
+    }
+
+    // 🧠 Smart scrolling with AI decision making
+    async startSmartScrolling() {
+        if (this.smartScrollingInterval) return;
+        
+        this.smartScrollingInterval = setInterval(async () => {
+            await this.performSmartScroll();
+        }, 3000); // Check every 3 seconds
+        
+        console.log('🧠 Smart scrolling started');
+    }
+
+    stopSmartScrolling() {
+        if (this.smartScrollingInterval) {
+            clearInterval(this.smartScrollingInterval);
+            this.smartScrollingInterval = null;
+        }
+        console.log('🧠 Smart scrolling stopped');
+    }
+
+    async performSmartScroll() {
+        if (!this.smartAgentsSystem || !this.isActive) return;
+        
+        const scrollAgent = this.smartAgentsSystem.agents.get('scrollDecisionAgent');
+        const contentAgent = this.smartAgentsSystem.agents.get('contentAnalysisAgent');
+        
+        if (!scrollAgent || !contentAgent) return;
+        
+        // Analyze current page state
+        const pageState = this.getCurrentPageState();
+        
+        // Let AI decide if we should scroll
+        const decision = await scrollAgent.shouldScroll(pageState);
+        
+        if (decision.decision) {
+            // Get scrolling direction and amount from AI
+            const scrollStrategy = await scrollAgent.analyzeScrollDirection(pageState);
+            
+            if (scrollStrategy.action === 'scroll_down') {
+                const scrollAmount = scrollStrategy.scrollAmount || 500;
+                window.scrollBy(0, scrollAmount);
+                
+                if (this.visualization) {
+                    this.visualization.addActivity(`📜 גלילה חכמה: ${scrollStrategy.reasoning}`);
+                }
+            }
+        }
+    }
+
+    getCurrentPageState() {
+        const posts = document.querySelectorAll('[data-urn*="activity:"], .feed-shared-update-v2');
+        const visiblePosts = Array.from(posts).filter(post => {
+            const rect = post.getBoundingClientRect();
+            return rect.top >= 0 && rect.bottom <= window.innerHeight;
+        });
+        
+        return {
+            visiblePosts: visiblePosts.length,
+            totalPosts: posts.length,
+            scrollPosition: window.scrollY,
+            timeOnPage: Date.now() - this.pageStartTime || 0,
+            userActivity: this.detectUserActivity()
+        };
+    }
+
+    detectUserActivity() {
+        // Simple user activity detection
+        return {
+            lastUserScroll: this.lastUserScrollTime || 0,
+            lastUserClick: this.lastUserClickTime || 0,
+            isUserActive: (Date.now() - (this.lastUserActivity || 0)) < 30000 // 30 seconds
+        };
     }
 
     detectPlatform() {

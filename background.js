@@ -486,33 +486,37 @@ Improved comment:`;
 
     async callCohereAPI(prompt, apiKey) {
         try {
-            const response = await fetch('https://api.cohere.com/v2/generate', {
+            // Convert old prompt format to new messages format
+            const messages = [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ];
+
+            const response = await fetch('https://api.cohere.com/v2/chat', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                    'Cohere-Version': '2022-12-06'
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    model: 'command',
-                    prompt: prompt,
+                    model: 'command-a-03-2025',
+                    messages: messages,
                     max_tokens: 150,
-                    temperature: 0.7,
-                    k: 0,
-                    stop_sequences: ["\n\n"],
-                    return_likelihoods: 'NONE'
+                    temperature: 0.7
                 })
             });
 
             if (!response.ok) {
-                console.error('Cohere API error:', response.status, response.statusText);
+                console.error('Cohere API v2 error:', response.status, response.statusText);
                 return null;
             }
 
             const data = await response.json();
             
-            if (data.generations && data.generations.length > 0) {
-                let comment = data.generations[0].text.trim();
+            if (data.message && data.message.content && data.message.content.length > 0) {
+                let comment = data.message.content[0].text.trim();
                 
                 // Clean up the response
                 comment = comment.replace(/^["']|["']$/g, ''); // Remove quotes
@@ -521,12 +525,12 @@ Improved comment:`;
                 
                 return comment;
             } else {
-                console.error('No generations in Cohere response');
+                console.error('No content in Cohere v2 response');
                 return null;
             }
             
         } catch (error) {
-            console.error('Cohere API call failed:', error);
+            console.error('Cohere API v2 call failed:', error);
             return null;
         }
     }
@@ -775,7 +779,7 @@ Return ONLY the JSON response.`;
 
     async callCohereAPI(apiKey, prompt) {
         try {
-            const response = await fetch('https://api.cohere.com/v2/generate', {
+            const response = await fetch('https://api.cohere.com/v2/chat', {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${apiKey}`,
