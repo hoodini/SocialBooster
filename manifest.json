@@ -21,9 +21,7 @@
     "https://cdn.jsdelivr.net/*",
     "https://huggingface.co/*"
   ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self' https://cdn.jsdelivr.net; object-src 'self'; worker-src 'self' blob:"
-  },
+
   "content_scripts": [
     {
               "matches": [

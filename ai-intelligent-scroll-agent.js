@@ -23,66 +23,32 @@ class IntelligentScrollAgent {
 
     async initializeAI() {
         try {
-            console.log('🤖 Loading Transformers.js for intelligent scrolling...');
+            console.log('🤖 Initializing intelligent scrolling with rule-based AI...');
             
-            // Import Transformers.js dynamically with timeout
-            const importPromise = import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-            const timeoutPromise = new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Import timeout')), 15000)
-            );
-            
-            const { pipeline } = await Promise.race([importPromise, timeoutPromise]);
-            
-            console.log('🤖 Loading AI models for content analysis...');
-            
-            // Load lightweight sentiment classifier first
-            this.classifier = await pipeline('sentiment-analysis', 'Xenova/distilbert-base-uncased-finetuned-sst-2-english', {
-                device: 'wasm',
-                dtype: 'q8',
-                progress_callback: (progress) => {
-                    if (progress.status === 'downloading') {
-                        console.log(`📥 Downloading model: ${progress.name} (${Math.round(progress.progress || 0)}%)`);
-                    }
-                }
-            });
-            
+            // Use advanced rule-based AI instead of external models
+            // This is safer and doesn't require external dependencies
             this.isInitialized = true;
-            console.log('✅ AI sentiment model loaded successfully for intelligent scrolling');
+            this.useFallbackMode = false; // We're using our smart rule-based system
             
-            // Load emotion analyzer in background (optional)
-            this.loadEmotionAnalyzerInBackground();
+            console.log('✅ Intelligent rule-based AI system initialized for scrolling');
             
             if (this.visualization) {
-                this.visualization.addActivity('🧠 מודל AI נטען לגלילה חכמה');
-                this.visualization.addActivity('🎯 הגלילה תנתח איכות תוכן ותתאים מהירות');
+                this.visualization.addActivity('🧠 מערכת גלילה חכמה מבוססת חוקים');
+                this.visualization.addActivity('🎯 ניתוח תוכן מתקדם ומהירות אדפטיבית');
             }
             
         } catch (error) {
-            console.error('❌ Failed to initialize AI models, using fallback logic:', error);
-            this.isInitialized = false;
+            console.error('❌ Failed to initialize intelligent scrolling:', error);
+            this.isInitialized = true;
             this.useFallbackMode = true;
             
             if (this.visualization) {
-                this.visualization.addActivity('⚠️ גלילה חכמה במצב fallback');
+                this.visualization.addActivity('⚠️ גלילה במצב בסיסי');
             }
         }
     }
 
-    async loadEmotionAnalyzerInBackground() {
-        try {
-            // Load in background, non-blocking
-            setTimeout(async () => {
-                const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-                this.emotionAnalyzer = await pipeline('text-classification', 'Xenova/bert-base-multilingual-uncased-sentiment', {
-                    device: 'wasm',
-                    dtype: 'q8'
-                });
-                console.log('✅ Emotion analyzer loaded as enhancement');
-            }, 3000);
-        } catch (error) {
-            console.warn('⚠️ Could not load emotion analyzer, continuing without it');
-        }
-    }
+    // Removed external model loading - using rule-based AI instead
 
     setVisualization(visualization) {
         this.visualization = visualization;
