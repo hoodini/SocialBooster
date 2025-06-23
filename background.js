@@ -146,6 +146,12 @@ class SocialBotBackground {
                     sendResponse({ success: true });
                     break;
 
+                case 'IMPROVE_COMMENT':
+                    await this.handleImproveComment(message.data)
+                        .then(result => sendResponse(result))
+                        .catch(error => sendResponse({ success: false, error: error.message }));
+                    return true;
+
                 default:
                     sendResponse({ success: false, error: 'Unknown message type' });
             }
@@ -416,6 +422,114 @@ class SocialBotBackground {
             console.error('Error recording AI generation:', error);
         }
     }
+
+    async handleImproveComment(data) {
+        try {
+            console.log('🤖 Improving comment based on feedback');
+            
+            const settings = await chrome.storage.sync.get(['cohereApiKey']);
+            
+            if (!settings.cohereApiKey) {
+                return { success: false, error: 'No API key' };
+            }
+            
+            // Prepare improvement prompt
+            const prompt = this.createImprovementPrompt(data);
+            
+            // Call Cohere API
+            const improvedComment = await this.callCohereAPI(prompt, settings.cohereApiKey);
+            
+            if (improvedComment) {
+                console.log('✅ Comment improved successfully');
+                return { success: true, comment: improvedComment };
+            } else {
+                return { success: false, error: 'API call failed' };
+            }
+            
+        } catch (error) {
+            console.error('Error improving comment:', error);
+            return { success: false, error: error.message };
+        }
+    }
+
+    createImprovementPrompt(data) {
+        const isHebrew = data.language === 'he';
+        
+        const basePrompt = isHebrew ?
+            `שפר את התגובה הזו על בסיס המשוב:
+
+תגובה מקורית: "${data.originalComment}"
+משוב: ${data.feedback}
+
+הנחיות:
+- שפר את התגובה על בסיס המשוב
+- שמור על הטון המקצועי
+- כתב בעברית בלבד
+- התחל ישירות עם התגובה המשופרת
+
+תגובה משופרת:` :
+            `Improve this comment based on the feedback:
+
+Original comment: "${data.originalComment}"
+Feedback: ${data.feedback}
+
+Guidelines:
+- Improve the comment based on the feedback
+- Maintain a professional tone
+- Write in English only
+- Start directly with the improved comment
+
+Improved comment:`;
+        
+        return basePrompt;
+    }
+
+    async callCohereAPI(prompt, apiKey) {
+        try {
+            const response = await fetch('https://api.cohere.com/v2/generate', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                    'Cohere-Version': '2022-12-06'
+                },
+                body: JSON.stringify({
+                    model: 'command',
+                    prompt: prompt,
+                    max_tokens: 150,
+                    temperature: 0.7,
+                    k: 0,
+                    stop_sequences: ["\n\n"],
+                    return_likelihoods: 'NONE'
+                })
+            });
+
+            if (!response.ok) {
+                console.error('Cohere API error:', response.status, response.statusText);
+                return null;
+            }
+
+            const data = await response.json();
+            
+            if (data.generations && data.generations.length > 0) {
+                let comment = data.generations[0].text.trim();
+                
+                // Clean up the response
+                comment = comment.replace(/^["']|["']$/g, ''); // Remove quotes
+                comment = comment.replace(/\n+/g, ' '); // Replace newlines with spaces
+                comment = comment.trim();
+                
+                return comment;
+            } else {
+                console.error('No generations in Cohere response');
+                return null;
+            }
+            
+        } catch (error) {
+            console.error('Cohere API call failed:', error);
+            return null;
+        }
+    }
 }
 
 // 🤖 Advanced AI Agent System - Multi-Agent Architecture
@@ -633,7 +747,7 @@ Return ONLY the JSON response.`;
     async fallbackCommentGeneration(apiKey, persona, postContent, replyContext) {
         // Simple fallback generation
         const prompt = this.buildSimplePrompt(persona, postContent, replyContext);
-        return await this.callCohereAPI(apiKey, prompt);
+        return await this.callCohereAPI(prompt, apiKey);
     }
 
     buildSimplePrompt(persona, postContent, replyContext = null) {
@@ -669,27 +783,40 @@ Return ONLY the JSON response.`;
                     'Cohere-Version': '2022-12-06'
                 },
                 body: JSON.stringify({
-                    model: 'command-r-plus-08-2024',
+                    model: 'command',
                     prompt: prompt,
-                    max_tokens: 200,
+                    max_tokens: 150,
                     temperature: 0.7,
-                    k: 50,
-                    p: 0.9,
-                    stop_sequences: ['\n\n'],
+                    k: 0,
+                    stop_sequences: ["\n\n"],
                     return_likelihoods: 'NONE'
                 })
             });
 
             if (!response.ok) {
-                throw new Error(`Cohere API error: ${response.status}`);
+                console.error('Cohere API error:', response.status, response.statusText);
+                return null;
             }
 
             const data = await response.json();
-            return data.generations[0].text.trim();
+            
+            if (data.generations && data.generations.length > 0) {
+                let comment = data.generations[0].text.trim();
+                
+                // Clean up the response
+                comment = comment.replace(/^["']|["']$/g, ''); // Remove quotes
+                comment = comment.replace(/\n+/g, ' '); // Replace newlines with spaces
+                comment = comment.trim();
+                
+                return comment;
+            } else {
+                console.error('No generations in Cohere response');
+                return null;
+            }
             
         } catch (error) {
             console.error('Cohere API call failed:', error);
-            throw error;
+            return null;
         }
     }
 }
