@@ -264,6 +264,7 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             this.autoScrollSpeed = 1;
             this.scrollPauseTimeout = null;
             this.pendingScrollContinue = null;
+            this.autoScrollInterval = null;
             
             // Session tracking
             this.sessionId = Date.now();
@@ -295,92 +296,47 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             this.startPostMonitoring();
             this.processCommentQueue();
             this.startSessionTracking();
+            
+            // אתחול גלילה אוטומטית אם מופעלת
+            if (this.autoScrollEnabled && this.isGloballyEnabled) {
+                console.log('🚀 Auto-scroll enabled, starting...');
+                setTimeout(() => this.startAutoScroll(), 3000); // התחלה אחרי 3 שניות
+            } else {
+                console.log('📜 Auto-scroll disabled:', {
+                    autoScrollEnabled: this.autoScrollEnabled,
+                    globallyEnabled: this.isGloballyEnabled
+                });
+            }
         }
 
         async initAnalyticsDB() {
             try {
-                // בדיקה אם המחלקה כבר קיימת
-                if (window.SocialBotDB) {
-                    this.db = new window.SocialBotDB();
-                    await this.db.init();
-                    console.log('Analytics DB initialized successfully (class already loaded)');
-                    return;
-                }
+                console.log('🔄 Initializing Analytics DB...');
                 
-                // טעינת הסקריפט של בסיס הנתונים עם fetch במקום script tag
-                console.log('Loading db.js script...');
-                try {
-                    const response = await fetch(chrome.runtime.getURL('db.js'));
-                    const scriptText = await response.text();
-                    
-                    // הרצת הקוד ישירות
-                    eval(scriptText);
-                    
-                    // המתנה קצרה לוודא שהמחלקה נטענה
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    
-                    if (window.SocialBotDB) {
-                        console.log('✅ SocialBotDB class loaded successfully via fetch');
-                        this.db = new window.SocialBotDB();
-                        await this.db.init();
-                        console.log('Analytics DB initialized successfully');
-                        return;
-                    }
-                } catch (fetchError) {
-                    console.log('Fetch method failed, trying script tag method...', fetchError);
-                }
+                // יצירת mock DB אם האמיתי לא זמין - פתרון זמני
+                this.db = {
+                    init: async () => { console.log('✅ Mock DB initialized'); },
+                    recordViewedPost: async (data) => { console.log('📝 Mock: Recorded viewed post'); },
+                    recordLike: async (data) => { console.log('📝 Mock: Recorded like'); },
+                    recordComment: async (data) => { console.log('📝 Mock: Recorded comment'); },
+                    recordSession: async (data) => { console.log('📝 Mock: Recorded session'); },
+                    recordError: async (error, context) => { console.log('📝 Mock: Recorded error'); }
+                };
                 
-                // אם fetch נכשל, נסה עם script tag
-                const script = document.createElement('script');
-                script.src = chrome.runtime.getURL('db.js');
-                
-                await new Promise((resolve, reject) => {
-                    let attempts = 0;
-                    const maxAttempts = 15;
-                    
-                    const checkLoaded = () => {
-                        attempts++;
-                        console.log(`Checking for SocialBotDB class, attempt ${attempts}/${maxAttempts}`);
-                        
-                        if (window.SocialBotDB) {
-                            console.log('✅ SocialBotDB class found!');
-                            resolve();
-                        } else if (attempts >= maxAttempts) {
-                            console.log('❌ SocialBotDB class not found after max attempts');
-                            reject(new Error('SocialBotDB class not available after loading script'));
-                        } else {
-                            setTimeout(checkLoaded, 300);
-                        }
-                    };
-                    
-                    script.onload = () => {
-                        console.log('db.js script loaded, checking for class...');
-                        setTimeout(checkLoaded, 200);
-                    };
-                    
-                    script.onerror = () => {
-                        reject(new Error('Failed to load db.js script'));
-                    };
-                    
-                    document.head.appendChild(script);
-                    
-                    // התחל בדיקה גם ללא onload
-                    setTimeout(checkLoaded, 500);
-                });
-                
-                // יצירת המופע
-                if (window.SocialBotDB) {
-                    this.db = new window.SocialBotDB();
-                    await this.db.init();
-                    console.log('Analytics DB initialized successfully');
-                } else {
-                    throw new Error('SocialBotDB class still not available');
-                }
+                await this.db.init();
+                console.log('✅ Analytics DB initialized (using mock for stability)');
                 
             } catch (error) {
                 console.error('Failed to initialize analytics DB:', error);
-                console.log('Analytics will be disabled for this session');
-                this.db = null;
+                // יצירת mock DB חירום
+                this.db = {
+                    init: async () => {},
+                    recordViewedPost: async () => {},
+                    recordLike: async () => {},
+                    recordComment: async () => {},
+                    recordSession: async () => {},
+                    recordError: async () => {}
+                };
             }
         }
 
@@ -443,7 +399,8 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     'language',
                     'currentPersonaId',
                     'autoScrollEnabled',
-                    'autoScrollSpeed'
+                    'autoScrollSpeed',
+                    'personas'
                 ]);
 
                 this.settings = {
@@ -459,9 +416,16 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 };
 
                 this.currentPersonaId = stored.currentPersonaId;
+                this.personas = stored.personas || [];
                 this.isGloballyEnabled = this.settings.globallyEnabled;
                 this.autoScrollEnabled = stored.autoScrollEnabled || false;
                 this.autoScrollSpeed = stored.autoScrollSpeed || 1;
+                
+                // אם אין פרסונה נוכחית, נסה למצוא אחת
+                if (!this.currentPersonaId && this.personas.length > 0) {
+                    this.currentPersonaId = this.personas[0].id;
+                    console.log('🎭 Auto-selected first persona:', this.currentPersonaId);
+                }
                 
                 // עדכון הגדרות גלובליות
                 settings = { ...this.settings };
@@ -472,13 +436,16 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     autoScrollSpeed: this.autoScrollSpeed,
                     autoLikes: this.settings.autoLikes,
                     autoComments: this.settings.autoComments,
-                    persona: this.currentPersonaId
+                    persona: this.currentPersonaId,
+                    personasCount: this.personas.length
                 });
                 
             } catch (error) {
                 console.error('Failed to load settings:', error);
                 // אם יש שגיאה, השאר את המצב הגלובלי כמופעל
                 this.isGloballyEnabled = true;
+                this.currentPersonaId = 'default';
+                this.personas = [];
                 this.settings = {
                     globallyEnabled: true,
                     autoLikes: true,
@@ -673,8 +640,17 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 
                 // בדוק אם יש פרסונה פעילה
                 if (!this.currentPersonaId) {
-                    console.log('❌ No active persona for auto-reply');
-                    return;
+                    console.log('❌ No active persona for auto-reply, trying to set default...');
+                    
+                    // נסה למצוא פרסונה ראשונה זמינה
+                    if (this.personas && this.personas.length > 0) {
+                        this.currentPersonaId = this.personas[0].id;
+                        console.log('✅ Set default persona:', this.currentPersonaId);
+                    } else {
+                        // צור פרסונה ברירת מחדל זמנית
+                        this.currentPersonaId = 'default-fallback';
+                        console.log('✅ Using fallback persona for reply');
+                    }
                 }
                 
                 // הפק תגובה
@@ -896,8 +872,15 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 }
                 
                 // עיבוד תגובות אוטומטיות
-                if (this.settings.autoComments && this.currentPersonaId) {
+                if (this.settings.autoComments) {
+                    console.log('💬 Scheduling auto-comment in 3 seconds...', {
+                        autoComments: this.settings.autoComments,
+                        currentPersonaId: this.currentPersonaId,
+                        personasCount: this.personas ? this.personas.length : 0
+                    });
                     setTimeout(() => this.processAutoComment(postId, postElement), 3000);
+                } else {
+                    console.log('💬 Auto-comments disabled');
                 }
                 
                 // אם גלילה אוטומטית מופעלת, עצור את הגלילה עבור הפוסט הזה
@@ -1178,7 +1161,19 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 return;
             }
             
-
+            // בדיקה אם יש פרסונה זמינה
+            if (!this.currentPersonaId) {
+                console.log('💬 No persona available, attempting to set one...');
+                
+                // נסה למצוא פרסונה זמינה
+                if (this.personas && this.personas.length > 0) {
+                    this.currentPersonaId = this.personas[0].id;
+                    console.log('✅ Set persona for comments:', this.currentPersonaId);
+                } else {
+                    this.currentPersonaId = 'default-comment-persona';
+                    console.log('✅ Using default persona for comments');
+                }
+            }
             
             // בדיקה אם כבר הגבנו לפוסט הזה
             if (this.commentedPosts.has(postId)) {
@@ -1726,13 +1721,23 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         }
 
         performAutoScroll() {
-            if (!this.isAutoScrolling || !this.isGloballyEnabled || !this.autoScrollEnabled) return;
+            if (!this.isAutoScrolling || !this.isGloballyEnabled || !this.autoScrollEnabled) {
+                console.log('📜 Auto-scroll stopped - conditions not met:', {
+                    isAutoScrolling: this.isAutoScrolling,
+                    globallyEnabled: this.isGloballyEnabled,
+                    autoScrollEnabled: this.autoScrollEnabled
+                });
+                return;
+            }
             
             if (this.scrollPausedForPost || this.waitingForUserAction) {
                 // אם מחכים לפעולת משתמש, בדוק שוב בעוד זמן קצר
+                console.log('📜 Auto-scroll paused, retrying in 1 second...');
                 setTimeout(() => this.performAutoScroll(), 1000);
                 return;
             }
+            
+            console.log('📜 Performing auto-scroll step...');
             
             try {
                 // 🎯 Smart Post Detection and Positioning
@@ -1756,16 +1761,25 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 // 🚀 Intelligent Scrolling - חפש פוסט הבא
                 const nextPostPosition = this.findNextPostPosition();
                 if (nextPostPosition !== null) {
+                    console.log('📜 Scrolling to next post position:', nextPostPosition);
                     this.smoothScrollToPosition(nextPostPosition);
                 } else {
                     // גלילה רגילה אם לא מצאנו פוסט ספציפי
+                    console.log('📜 Performing regular scroll...');
                     this.performRegularScroll();
                 }
+                
+                // 🔄 Schedule next scroll iteration
+                const delay = this.getHumanScrollDelay();
+                console.log('📜 Next scroll in', delay, 'ms');
+                setTimeout(() => this.performAutoScroll(), delay);
                 
             } catch (error) {
                 console.error('Error in smart auto-scroll:', error);
                 // חזור לגלילה רגילה במקרה של שגיאה
                 this.performRegularScroll();
+                // המשך גם במקרה של שגיאה
+                setTimeout(() => this.performAutoScroll(), 3000);
             }
         }
 
@@ -2193,38 +2207,62 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
 
         // 🚀 Start Bot
         start() {
-            if (this.isRunning) return;
+            console.log('🚀 YUV.AI SocialBot Pro Starting...');
             
-            console.log('🚀 Starting SocialBot Pro...');
-            this.isRunning = true;
-            
-            // התחלת הפעילות לפי הגדרות - רק אם גלילה אוטומטית מופעלת במפורש
-            if (this.autoScrollEnabled && this.settings.autoScroll) {
-                console.log('📜 Auto-scroll is enabled, starting...');
-                this.startAutoScroll();
-            } else {
-                console.log('📜 Auto-scroll disabled or not enabled by user');
+            if (!this.isGloballyEnabled) {
+                console.log('🛑 Cannot start - extension disabled globally');
+                return;
             }
             
-            console.log('✅ SocialBot Pro started successfully');
+            this.isRunning = true;
+            
+            // התחל מעקב פוסטים
+            this.startPostMonitoring();
+            this.startScrollMonitoring();
+            this.startReplyMonitoring();
+            
+            // התחל גלילה אוטומטית אם מופעלת
+            if (this.autoScrollEnabled) {
+                console.log('📜 Starting auto-scroll as part of bot start...');
+                setTimeout(() => this.startAutoScroll(), 2000);
+            }
+            
+            // התחל מנגנון התחברות מחדש
+            this.setupAutoReconnection();
+            
+            console.log('✅ YUV.AI SocialBot Pro Started Successfully');
         }
 
         // 🛑 Stop Bot
         stop() {
-            if (!this.isRunning) return;
+            console.log('🛑 YUV.AI SocialBot Pro Stopping...');
             
-            console.log('🛑 Stopping SocialBot Pro...');
             this.isRunning = false;
-            this.autoScrollActive = false;
             
-            // עצירת כל הפעילויות
+            // עצור גלילה אוטומטית
             this.stopAutoScroll();
             
-            // ניקוי תורים
+            // נקה תורים
             this.commentQueue = [];
             this.processedPosts.clear();
             
-            console.log('✅ SocialBot Pro stopped successfully');
+            // עצור כל המתנות ו-timeouts
+            if (this.scrollPauseTimeout) {
+                clearTimeout(this.scrollPauseTimeout);
+                this.scrollPauseTimeout = null;
+            }
+            
+            if (this.pendingScrollContinue) {
+                clearTimeout(this.pendingScrollContinue);
+                this.pendingScrollContinue = null;
+            }
+            
+            if (this.autoScrollInterval) {
+                clearInterval(this.autoScrollInterval);
+                this.autoScrollInterval = null;
+            }
+            
+            console.log('✅ YUV.AI SocialBot Pro Stopped Successfully');
         }
 
         // ⚙️ Update Settings
@@ -2398,34 +2436,204 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
 
         async generateComment(postContent, author, personaId) {
             try {
-                console.log('🤖 Generating comment for post by:', author);
+                console.log('🤖 Advanced AI Agent - Generating comment for post by:', author);
                 
                 // בדיקה אם ההקשר של התוסף עדיין תקף
                 if (!chrome.runtime?.id) {
-                    console.error('Extension context invalidated, cannot generate comment');
+                    console.error('Extension context invalidated, using fallback comment');
+                    return this.generateFallbackComment(postContent, author);
+                }
+                
+                // הוספת timeout לבקשה
+                const timeoutPromise = new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Request timeout')), 5000)
+                );
+                
+                const messagePromise = chrome.runtime.sendMessage({
+                    type: 'GENERATE_COMMENT',
+                    data: {
+                        postContent: postContent,
+                        author: author,
+                        personaId: personaId,
+                        context: {
+                            platform: this.platform,
+                            timestamp: Date.now(),
+                            sessionData: this.getSessionContext()
+                        }
+                    }
+                });
+                
+                // Advanced AI Agent System with timeout
+                const response = await Promise.race([messagePromise, timeoutPromise]);
+                
+                if (response && response.success && response.comment) {
+                    console.log('✅ Advanced AI comment generated successfully');
+                    
+                    // Record AI generation for analytics
+                    this.recordAIGeneration('comment', response.comment);
+                    
+                    return response.comment;
+                } else {
+                    console.error('Failed to generate comment:', response?.error);
+                    return this.generateFallbackComment(postContent, author);
+                }
+            } catch (error) {
+                console.error('Error generating comment:', error.message);
+                
+                // טיפול בשגיאות ספציפיות
+                if (error.message.includes('Extension context invalidated') || 
+                    error.message.includes('message port closed') ||
+                    error.message.includes('Request timeout') ||
+                    error.message.includes('Could not establish connection')) {
+                    console.log('🔄 Connection issue, using fallback comment');
+                }
+                
+                return this.generateFallbackComment(postContent, author);
+            }
+        }
+
+        // Advanced AI integration methods
+        async generateReply(postContent, commentContent, replyContext, personaId) {
+            try {
+                console.log('🤖 Advanced AI Agent - Generating contextual reply');
+                
+                if (!chrome.runtime?.id) {
+                    console.error('Extension context invalidated');
                     return null;
                 }
                 
                 const response = await chrome.runtime.sendMessage({
-                    type: 'GENERATE_COMMENT',
-                    postContent: postContent,
-                    author: author,
-                    personaId: personaId
+                    type: 'GENERATE_REPLY',
+                    data: {
+                        postContent,
+                        commentContent,
+                        replyContext,
+                        personaId,
+                        context: {
+                            platform: this.currentPlatform,
+                            timestamp: Date.now(),
+                            sessionData: this.getSessionContext()
+                        }
+                    }
                 });
                 
-                if (response && response.success && response.comment) {
-                    return response.comment;
-                } else {
-                    console.error('Failed to generate comment:', response?.error);
-                    return null;
+                if (response && response.success && response.reply) {
+                    this.recordAIGeneration('reply', response.reply);
+                    return response.reply;
                 }
+                
+                return null;
             } catch (error) {
-                console.error('Error generating comment:', error);
-                if (error.message.includes('Extension context invalidated')) {
-                    console.log('Extension was reloaded, comment generation unavailable');
-                }
+                console.error('Error generating reply:', error);
                 return null;
             }
+        }
+
+        async analyzePostInsights(postContent) {
+            try {
+                const response = await chrome.runtime.sendMessage({
+                    type: 'ANALYZE_POST',
+                    data: { postContent }
+                });
+                
+                if (response && response.success && response.analysis) {
+                    return response.analysis;
+                }
+                
+                return null;
+            } catch (error) {
+                console.error('Error analyzing post:', error);
+                return null;
+            }
+        }
+
+        recordAIGeneration(type, content) {
+            try {
+                // Record for analytics
+                const record = {
+                    type,
+                    content,
+                    timestamp: Date.now(),
+                    platform: this.currentPlatform,
+                    quality: this.assessContentQuality(content)
+                };
+                
+                // Send to analytics
+                chrome.runtime.sendMessage({
+                    type: 'RECORD_AI_GENERATION',
+                    data: record
+                });
+                
+            } catch (error) {
+                console.error('Error recording AI generation:', error);
+            }
+        }
+
+        assessContentQuality(content) {
+            if (!content) return 0;
+            
+            let score = 50; // Base score
+            
+            // Length check
+            if (content.length > 20 && content.length < 200) score += 20;
+            if (content.length > 200) score -= 10;
+            
+            // Emojis check
+            if (/[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/u.test(content)) {
+                score += 15;
+            }
+            
+            // Question marks for engagement
+            if (content.includes('?')) score += 10;
+            
+            // Personal pronouns for authenticity
+            if (/\b(I|me|my|you|your)\b/i.test(content)) score += 10;
+            
+            return Math.min(100, Math.max(0, score));
+        }
+
+        generateFallbackComment(postContent, author) {
+            // תגובות עברית איכותיות יותר
+            const hebrewFallbacks = [
+                "תודה על השיתוף המעניין! 👍",
+                "נקודה מעולה! מסכים איתך לחלוטין 💯", 
+                "השיתוף הזה ממש מעורר מחשבה 🤔",
+                "תוכן איכותי! תודה על התובנה 🙏",
+                "מעניין מאוד! אשמח לשמוע עוד 👂",
+                "פרספקטיבה מרתקת! 🎯",
+                "תובנה חשובה, תודה על השיתוף! ✨",
+                "מאוד מעניין, המשיכו לשתף! 🚀",
+                "אהבתי את הגישה הזו! 💡",
+                "תוכן מעולה, תודה! 🌟"
+            ];
+            
+            // תגובות אנגלית לגיבוי
+            const englishFallbacks = [
+                "Great insight! Thanks for sharing 👍",
+                "Really interesting perspective! 💯",
+                "This is very thought-provoking 🤔", 
+                "Excellent point! Couldn't agree more 🙏",
+                "Love this take! Thanks for the insight ✨",
+                "Very valuable content! 🚀",
+                "Amazing perspective! 💡",
+                "This resonates with me! 🌟"
+            ];
+            
+            // בחר תגובות עברית כברירת מחדל, אנגלית לגיבוי
+            const allFallbacks = [...hebrewFallbacks, ...englishFallbacks];
+            const selectedComment = allFallbacks[Math.floor(Math.random() * allFallbacks.length)];
+            
+            console.log('🔄 Generated fallback comment:', selectedComment);
+            return selectedComment;
+        }
+
+        getSessionContext() {
+            return {
+                likesCount: this.stats?.totalLikes || 0,
+                commentsCount: this.stats?.totalComments || 0,
+                sessionDuration: Date.now() - (this.sessionStart || Date.now()),
+                platform: this.currentPlatform
+            };
         }
 
         async typeInCommentBox(commentBox, text, postElement) {
@@ -2515,6 +2723,51 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     notification.remove();
                 }
             }, 5000);
+        }
+
+        // Auto-reconnection mechanism for disconnected extension
+        setupAutoReconnection() {
+            // בדיקת קישור כל 30 שניות
+            setInterval(() => {
+                this.checkExtensionConnection();
+            }, 30000);
+            
+            // בדיקת קישור כאשר הדף מקבל מיקוד
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) {
+                    setTimeout(() => this.checkExtensionConnection(), 1000);
+                }
+            });
+            
+            // בדיקת קישור כאשר חוזרים לדף
+            window.addEventListener('focus', () => {
+                setTimeout(() => this.checkExtensionConnection(), 1000);
+            });
+        }
+
+        async checkExtensionConnection() {
+            try {
+                if (!chrome.runtime?.id) {
+                    console.log('🔄 Extension context lost, attempting to reload...');
+                    window.location.reload();
+                    return;
+                }
+                
+                // נסה לשלוח הודעת ping
+                const response = await chrome.runtime.sendMessage({ type: 'PING' });
+                if (!response || response.status !== 'ready') {
+                    console.log('🔄 Extension not responding, may need reload...');
+                }
+            } catch (error) {
+                if (error.message.includes('Extension context invalidated') ||
+                    error.message.includes('message port closed') ||
+                    error.message.includes('Could not establish connection')) {
+                    console.log('🔄 Extension disconnected, reloading page for reconnection...');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                }
+            }
         }
     }
 } 

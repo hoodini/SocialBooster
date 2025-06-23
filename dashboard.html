@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>YUV.AI SocialBot Pro - דשבורד אנליטיקה</title>
+    <title>YUV.AI SocialBot Pro - דשבורד אנליטיקה מתקדם</title>
     <link rel="stylesheet" href="dashboard.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
@@ -21,12 +21,18 @@
             <div class="logo-section">
                 <img src="icons/icon48.png" alt="YUV.AI" class="logo">
                 <div class="brand-info">
-                    <h1 data-translate="dashboardTitle">YUV.AI SocialBot Pro</h1>
+                    <h1 data-translate="dashboardTitle">YUV.AI SocialBot Pro - דשבורד AI מתקדם</h1>
                     <p class="motto">FLY HIGH WITH YUV.AI</p>
                     <p class="creator" data-translate="createdBy">Created by Yuval Avidani</p>
                 </div>
             </div>
             <div class="header-controls">
+                <div class="ai-status">
+                    <div class="ai-indicator" id="aiStatus">
+                        <span class="ai-dot"></span>
+                        <span class="ai-text">AI סוכנים פעילים</span>
+                    </div>
+                </div>
                 <div class="manual-controls">
                     <button id="manualLikeBtn" class="manual-btn like-btn" title="לייק ידני לפוסט הבא">
                         👍 לייק ידני
@@ -34,8 +40,12 @@
                     <button id="manualCommentBtn" class="manual-btn comment-btn" title="תגובה ידנית לפוסט הבא">
                         💬 תגובה ידנית
                     </button>
+                    <button id="aiInsightsBtn" class="manual-btn ai-btn" title="קבל תובנות AI">
+                        🧠 תובנות AI
+                    </button>
                 </div>
                 <select id="timeRangeSelect" class="time-selector">
+                    <option value="1">24 שעות אחרונות</option>
                     <option value="7">שבוע אחרון</option>
                     <option value="30" selected>30 ימים אחרונים</option>
                     <option value="90">3 חודשים אחרונים</option>
@@ -49,13 +59,55 @@
         <!-- Loading Screen -->
         <div id="loadingScreen" class="loading-screen">
             <div class="loading-spinner"></div>
-            <p>טוען נתוני אנליטיקה...</p>
+            <p>טוען נתוני אנליטיקה מתקדמים...</p>
         </div>
 
         <!-- Main Dashboard -->
         <div id="dashboardContent" class="dashboard-content" style="display: none;">
             
-            <!-- Summary Cards -->
+            <!-- AI Insights Panel -->
+            <section class="ai-insights-section">
+                <div class="section-header">
+                    <h2>🧠 תובנות AI מתקדמות</h2>
+                    <div class="insights-controls">
+                        <button id="generateInsights" class="btn-primary">יצר תובנות חדשות</button>
+                        <button id="refreshInsights" class="btn-secondary">רענן תובנות</button>
+                    </div>
+                </div>
+                <div class="insights-grid">
+                    <div class="insight-card performance-insight">
+                        <div class="insight-header">
+                            <h3>📊 ניתוח ביצועים</h3>
+                            <span class="insight-badge">זמן אמת</span>
+                        </div>
+                        <div class="insight-content" id="performanceInsight">
+                            <div class="loading-insight">מייצר תובנות...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="insight-card trend-insight">
+                        <div class="insight-header">
+                            <h3>📈 ניתוח מגמות</h3>
+                            <span class="insight-badge">חיזוי</span>
+                        </div>
+                        <div class="insight-content" id="trendInsight">
+                            <div class="loading-insight">מייצר תובנות...</div>
+                        </div>
+                    </div>
+                    
+                    <div class="insight-card recommendations-insight">
+                        <div class="insight-header">
+                            <h3>💡 המלצות מותאמות</h3>
+                            <span class="insight-badge">אופטימיזציה</span>
+                        </div>
+                        <div class="insight-content" id="recommendationsInsight">
+                            <div class="loading-insight">מייצר המלצות...</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Advanced Summary Cards -->
             <section class="summary-section">
                 <div class="summary-grid">
                     <div class="summary-card likes-card">
@@ -64,6 +116,10 @@
                             <h3>סך הלייקים</h3>
                             <div class="stat-number" id="totalLikes">0</div>
                             <div class="stat-change" id="likesChange">-</div>
+                            <div class="stat-details">
+                                <span class="detail-item">ממוצע יומי: <span id="avgDailyLikes">0</span></span>
+                                <span class="detail-item">שיא יומי: <span id="maxDailyLikes">0</span></span>
+                            </div>
                         </div>
                     </div>
                     
@@ -73,6 +129,10 @@
                             <h3>סך התגובות</h3>
                             <div class="stat-number" id="totalComments">0</div>
                             <div class="stat-change" id="commentsChange">-</div>
+                            <div class="stat-details">
+                                <span class="detail-item">ממוצע אורך: <span id="avgCommentLength">0</span> מילים</span>
+                                <span class="detail-item">איכות AI: <span id="aiQualityScore">0%</span></span>
+                            </div>
                         </div>
                     </div>
                     
@@ -82,31 +142,103 @@
                             <h3>פוסטים שנצפו</h3>
                             <div class="stat-number" id="totalPosts">0</div>
                             <div class="stat-change" id="postsChange">-</div>
+                            <div class="stat-details">
+                                <span class="detail-item">זמן צפייה ממוצע: <span id="avgViewTime">0</span>ש</span>
+                                <span class="detail-item">שיעור מעורבות: <span id="engagementRate">0%</span></span>
+                            </div>
                         </div>
                     </div>
                     
-                    <div class="summary-card engagement-card">
-                        <div class="card-icon">🎯</div>
+                    <div class="summary-card ai-insights-card">
+                        <div class="card-icon">🧠</div>
                         <div class="card-content">
-                            <h3>אחוז מעורבות</h3>
-                            <div class="stat-number" id="engagementRate">0%</div>
-                            <div class="stat-change" id="engagementChange">-</div>
+                            <h3>תובנות AI</h3>
+                            <div class="stat-number" id="totalInsights">0</div>
+                            <div class="stat-change" id="insightsChange">-</div>
+                            <div class="stat-details">
+                                <span class="detail-item">דיוק תחזיות: <span id="predictionAccuracy">0%</span></span>
+                                <span class="detail-item">ביצועי סוכנים: <span id="agentPerformance">0%</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card sentiment-card">
+                        <div class="card-icon">😊</div>
+                        <div class="card-content">
+                            <h3>ניתוח רגש</h3>
+                            <div class="stat-number" id="sentimentScore">0%</div>
+                            <div class="stat-change" id="sentimentChange">-</div>
+                            <div class="stat-details">
+                                <span class="detail-item">חיוביות: <span id="positiveRatio">0%</span></span>
+                                <span class="detail-item">עוצמה רגשית: <span id="emotionalIntensity">בינוני</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="summary-card efficiency-card">
+                        <div class="card-icon">⚡</div>
+                        <div class="card-content">
+                            <h3>יעילות מערכת</h3>
+                            <div class="stat-number" id="systemEfficiency">0%</div>
+                            <div class="stat-change" id="efficiencyChange">-</div>
+                            <div class="stat-details">
+                                <span class="detail-item">זמן תגובה: <span id="responseTime">0</span>ש</span>
+                                <span class="detail-item">שיעור הצלחה: <span id="successRate">0%</span></span>
+                            </div>
                         </div>
                     </div>
                 </div>
             </section>
 
-            <!-- Charts Section -->
+            <!-- Enhanced Charts Section -->
             <section class="charts-section">
                 <div class="charts-grid">
                     
+                    <!-- Real-time Activity Chart -->
+                    <div class="chart-container featured">
+                        <div class="chart-header">
+                            <h3>📊 פעילות זמן אמת</h3>
+                            <div class="chart-controls">
+                                <button class="chart-btn active" data-chart="realtime">זמן אמת</button>
+                                <button class="chart-btn" data-chart="hourly">שעתי</button>
+                                <button class="chart-btn" data-chart="daily">יומי</button>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="realtimeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- AI Performance Chart -->
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>🤖 ביצועי סוכני AI</h3>
+                            <div class="chart-info">ביצועי הסוכנים השונים</div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="aiPerformanceChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Sentiment Analysis Over Time -->
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>😊 ניתוח רגש לאורך זמן</h3>
+                            <div class="chart-info">מעקב אחר מצבי הרוח</div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="sentimentChart"></canvas>
+                        </div>
+                    </div>
+
                     <!-- Daily Activity Chart -->
                     <div class="chart-container">
                         <div class="chart-header">
-                            <h3>פעילות יומית</h3>
+                            <h3>📈 פעילות יומית מפורטת</h3>
                             <div class="chart-controls">
                                 <button class="chart-btn active" data-chart="daily">יומי</button>
                                 <button class="chart-btn" data-chart="weekly">שבועי</button>
+                                <button class="chart-btn" data-chart="monthly">חודשי</button>
                             </div>
                         </div>
                         <div class="chart-wrapper">
@@ -117,44 +249,135 @@
                     <!-- Platform Distribution -->
                     <div class="chart-container">
                         <div class="chart-header">
-                            <h3>התפלגות לפי פלטפורמה</h3>
+                            <h3>🌐 התפלגות לפי פלטפורמה</h3>
+                            <div class="chart-info">ביצועים לפי רשת חברתית</div>
                         </div>
                         <div class="chart-wrapper">
                             <canvas id="platformChart"></canvas>
                         </div>
                     </div>
                     
-                    <!-- Engagement Rate Over Time -->
+                    <!-- Engagement Quality Analysis -->
                     <div class="chart-container wide">
                         <div class="chart-header">
-                            <h3>מגמת מעורבות לאורך זמן</h3>
+                            <h3>💎 ניתוח איכות מעורבות</h3>
+                            <div class="chart-info">איכות האינטראקציות מול הכמות</div>
                         </div>
                         <div class="chart-wrapper">
-                            <canvas id="engagementTrendChart"></canvas>
+                            <canvas id="engagementQualityChart"></canvas>
                         </div>
                     </div>
-                    
-                    <!-- Comment Length Analysis -->
+
+                    <!-- Response Time Analysis -->
                     <div class="chart-container">
                         <div class="chart-header">
-                            <h3>ניתוח אורך תגובות</h3>
+                            <h3>⏱️ ניתוח זמני תגובה</h3>
+                            <div class="chart-info">מהירות יצירת תגובות</div>
                         </div>
                         <div class="chart-wrapper">
-                            <canvas id="commentLengthChart"></canvas>
+                            <canvas id="responseTimeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Content Type Performance -->
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>📋 ביצועי סוגי תוכן</h3>
+                            <div class="chart-info">איזה תוכן מבצע הכי טוב</div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="contentTypeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Persona Performance -->
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>🎭 ביצועי פרסונות</h3>
+                            <div class="chart-info">איזו פרסונה מבצעת הכי טוב</div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="personaChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Trend Prediction Chart -->
+                    <div class="chart-container wide">
+                        <div class="chart-header">
+                            <h3>🔮 חיזוי מגמות עתידיות</h3>
+                            <div class="chart-info">תחזיות מבוססות AI</div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="predictionChart"></canvas>
                         </div>
                     </div>
                     
                 </div>
             </section>
 
-            <!-- Data Tables Section -->
+            <!-- Advanced Analytics Tables -->
             <section class="tables-section">
+                <div class="section-header">
+                    <h2>📊 אנליטיקה מתקדמת</h2>
+                    <div class="table-controls">
+                        <button id="exportAdvancedBtn" class="btn-secondary">ייצא דוח מתקדם</button>
+                        <button id="printReportBtn" class="btn-secondary">הדפס דוח</button>
+                    </div>
+                </div>
                 <div class="tables-grid">
                     
+                    <!-- Top Performing Content -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>🏆 התוכן המבצע ביותר</h3>
+                            <span class="table-info">פוסטים עם המעורבות הגבוהה ביותר</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table id="topContentTable">
+                                <thead>
+                                    <tr>
+                                        <th>תוכן</th>
+                                        <th>פלטפורמה</th>
+                                        <th>מעורבות</th>
+                                        <th>רגש</th>
+                                        <th>תאריך</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- יתווסף דינמית -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- AI Agent Performance -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>🤖 ביצועי סוכני AI</h3>
+                            <span class="table-info">ביצועים של הסוכנים השונים</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table id="agentPerformanceTable">
+                                <thead>
+                                    <tr>
+                                        <th>סוכן</th>
+                                        <th>משימות</th>
+                                        <th>הצלחה</th>
+                                        <th>זמן ממוצע</th>
+                                        <th>איכות</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- יתווסף דינמית -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- Top Authors -->
                     <div class="table-container">
                         <div class="table-header">
-                            <h3>מחברים מובילים</h3>
+                            <h3>👥 מחברים מובילים</h3>
                             <span class="table-info">המחברים שהכי מגיבים להם</span>
                         </div>
                         <div class="table-wrapper">
@@ -163,7 +386,9 @@
                                     <tr>
                                         <th>מחבר</th>
                                         <th>תגובות</th>
+                                        <th>לייקים</th>
                                         <th>אחוז</th>
+                                        <th>רגש ממוצע</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -176,17 +401,66 @@
                     <!-- Top Comments -->
                     <div class="table-container">
                         <div class="table-header">
-                            <h3>התגובות הטובות ביותר</h3>
-                            <span class="table-info">התגובות הארוכות והמפורטות ביותר</span>
+                            <h3>💬 התגובות הטובות ביותר</h3>
+                            <span class="table-info">התגובות האיכותיות ביותר</span>
                         </div>
                         <div class="table-wrapper">
                             <table id="topCommentsTable">
                                 <thead>
                                     <tr>
                                         <th>תגובה</th>
+                                        <th>פרסונה</th>
                                         <th>פלטפורמה</th>
+                                        <th>איכות AI</th>
                                         <th>תאריך</th>
-                                        <th>אורך</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- יתווסף דינמית -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Sentiment Analysis Table -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>😊 ניתוח רגש מפורט</h3>
+                            <span class="table-info">חלוקת רגשות בתגובות</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table id="sentimentTable">
+                                <thead>
+                                    <tr>
+                                        <th>רגש</th>
+                                        <th>כמות</th>
+                                        <th>אחוז</th>
+                                        <th>עוצמה ממוצעת</th>
+                                        <th>מגמה</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- יתווסף דינמית -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Error Analysis Table -->
+                    <div class="table-container">
+                        <div class="table-header">
+                            <h3>⚠️ ניתוח שגיאות ושיפורים</h3>
+                            <span class="table-info">שגיאות והזדמנויות לשיפור</span>
+                        </div>
+                        <div class="table-wrapper">
+                            <table id="errorAnalysisTable">
+                                <thead>
+                                    <tr>
+                                        <th>סוג שגיאה</th>
+                                        <th>תדירות</th>
+                                        <th>הצעה לשיפור</th>
+                                        <th>חשיבות</th>
+                                        <th>סטטוס</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -199,83 +473,59 @@
                 </div>
             </section>
 
-            <!-- Real-time Activity -->
+            <!-- Live Activity Feed -->
             <section class="activity-section">
-                <div class="activity-header">
-                    <h3>פעילות בזמן אמת</h3>
-                    <div class="activity-status">
-                        <span class="status-indicator" id="activityStatus"></span>
-                        <span id="activityText">מתחבר...</span>
+                <div class="section-header">
+                    <h2>⚡ פעילות זמן אמת</h2>
+                    <div class="activity-controls">
+                        <button id="pauseActivity" class="btn-secondary">השהה</button>
+                        <button id="clearActivity" class="btn-secondary">נקה</button>
+                        <div class="activity-filter">
+                            <select id="activityFilter">
+                                <option value="all">הכל</option>
+                                <option value="likes">לייקים</option>
+                                <option value="comments">תגובות</option>
+                                <option value="ai">פעילות AI</option>
+                                <option value="errors">שגיאות</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="activity-feed" id="activityFeed">
-                    <!-- פעילות תתווסף דינמית -->
-                </div>
-            </section>
-
-            <!-- Settings & Controls -->
-            <section class="controls-section">
-                <div class="controls-grid">
-                    
-                    <div class="control-group">
-                        <h4>ניהול נתונים</h4>
-                        <button id="cleanDataBtn" class="control-btn warning">נקה נתונים ישנים</button>
-                        <button id="resetStatsBtn" class="control-btn danger">אפס כל הסטטיסטיקות</button>
-                    </div>
-                    
-                    <div class="control-group">
-                        <h4>ייצוא נתונים</h4>
-                        <button id="exportCsvBtn" class="control-btn">ייצא CSV</button>
-                        <button id="exportJsonBtn" class="control-btn">ייצא JSON</button>
-                    </div>
-                    
-                    <div class="control-group">
-                        <h4>הגדרות אנליטיקה</h4>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="realTimeUpdates" checked>
-                            עדכונים בזמן אמת
-                        </label>
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="detailedLogging" checked>
-                            רישום מפורט
-                        </label>
-                    </div>
-                    
+                    <!-- פעילות זמן אמת תתווסף כאן -->
                 </div>
             </section>
 
         </div>
 
-        <!-- Footer -->
-        <footer class="dashboard-footer">
-            <div class="footer-content">
-                <div class="social-links">
-                    <a href="https://twitter.com/yuvalav" target="_blank" class="social-link twitter">
-                        <span class="social-icon">🐦</span> @yuvalav
-                    </a>
-                    <a href="https://instagram.com/yuval_770" target="_blank" class="social-link instagram">
-                        <span class="social-icon">📸</span> @yuval_770
-                    </a>
-                    <a href="https://linktr.ee/yuvai" target="_blank" class="social-link linktree">
-                        <span class="social-icon">🔗</span> linktr.ee/yuvai
-                    </a>
-                </div>
-                <div class="footer-info">
-                    <p>&copy; 2025 YUV.AI - Yuval Avidani. All rights reserved.</p>
-                    <p>גרסה 1.0.0 | דשבורד אנליטיקה מתקדם</p>
-                </div>
-            </div>
-        </footer>
-
-        <!-- Modal for Detailed Views -->
+        <!-- Enhanced Detail Modal -->
         <div id="detailModal" class="modal">
-            <div class="modal-content">
+            <div class="modal-content enhanced">
                 <div class="modal-header">
-                    <h3 id="modalTitle">פרטים</h3>
-                    <span class="modal-close">&times;</span>
+                    <h3 id="modalTitle">פרטים מתקדמים</h3>
+                    <button class="modal-close">&times;</button>
                 </div>
                 <div class="modal-body" id="modalBody">
-                    <!-- תוכן יתווסף דינמית -->
+                    <!-- תוכן מפורט יתווסף כאן -->
+                </div>
+                <div class="modal-footer">
+                    <button id="modalExport" class="btn-secondary">ייצא נתונים</button>
+                    <button id="modalClose" class="btn-primary">סגור</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- AI Insights Modal -->
+        <div id="aiInsightsModal" class="modal">
+            <div class="modal-content ai-modal">
+                <div class="modal-header">
+                    <h3>🧠 תובנות AI מתקדמות</h3>
+                    <button class="modal-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="insights-container" id="aiInsightsContainer">
+                        <div class="loading-insight">מייצר תובנות מתקדמות...</div>
+                    </div>
                 </div>
             </div>
         </div>
