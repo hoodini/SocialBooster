@@ -9,6 +9,8 @@ if (window.YuvAISocialBotProInstance) {
 // Additional protection against redeclaration
 if (!window.YuvAISocialBotProClass) {
 
+console.log('content script loaded');
+
 class YuvAISocialBotPro {
     constructor() {
         this.isActive = false;
@@ -72,17 +74,27 @@ class YuvAISocialBotPro {
     }
 
     detectPlatformFallback() {
-        const hostname = window.location.hostname.toLowerCase();
-        
-        if (hostname.includes('linkedin.com')) {
-            return 'linkedin';
-        } else if (hostname.includes('facebook.com')) {
-            return 'facebook';
-        } else if (hostname.includes('x.com') || hostname.includes('twitter.com')) {
-            return 'x';
-        } else {
+        try {
+            const hostname = window.location.hostname.toLowerCase();
+            
+            if (hostname.includes('linkedin.com')) {
+                return 'linkedin';
+            } else if (hostname.includes('facebook.com')) {
+                return 'facebook';
+            } else if (hostname.includes('x.com') || hostname.includes('twitter.com')) {
+                return 'x';
+            } else {
+                return 'unknown';
+            }
+        } catch (error) {
+            console.warn('Error detecting platform:', error);
             return 'unknown';
         }
+    }
+
+    // Legacy method for backward compatibility
+    detectPlatform() {
+        return this.detectPlatformFallback();
     }
 
     async waitForSmartAIAgentsSystem() {

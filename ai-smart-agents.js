@@ -40,6 +40,11 @@ class AISmartAgentsSystem {
         this.agents.set('strategyAgent', new StrategyAgent(this));
         this.agents.set('engagementAnalysisAgent', new EngagementAnalysisAgent(this));
         
+        // Add active automation agents
+        this.agents.set('likeAgent', new LikeAgent(this));               // ❤️ Performs actual likes
+        this.agents.set('commentAgent', new CommentAgent(this));         // 💬 Performs actual comments
+        this.agents.set('postScannerAgent', new PostScannerAgent(this)); // 🔍 Scans for posts
+        
         console.log('🧠 AI Smart Agents initialized with Platform Detection + Transformers.js + Cohere API v2');
     }
 
@@ -692,6 +697,459 @@ class EngagementAnalysisAgent extends BaseAIAgent {
     }
 }
 
+// Active automation agents that perform actual actions
+class LikeAgent extends BaseAIAgent {
+    constructor(system) {
+        super(system);
+        this.likeInterval = null;
+        this.processedPosts = new Set();
+    }
+
+    definePersonality() {
+        return {
+            role: 'Like Agent',
+            traits: ['quick', 'selective', 'strategic'],
+            expertise: 'engagement'
+        };
+    }
+
+    getAgentIcon() { return '❤️'; }
+
+    async start() {
+        await super.start();
+        if (this.settings.autoLikes) {
+            this.startLikeProcess();
+        }
+    }
+
+    async stop() {
+        await super.stop();
+        if (this.likeInterval) {
+            clearInterval(this.likeInterval);
+            this.likeInterval = null;
+        }
+    }
+
+    updateSettings(settings) {
+        super.updateSettings(settings);
+        if (settings.autoLikes && !this.likeInterval) {
+            this.startLikeProcess();
+        } else if (!settings.autoLikes && this.likeInterval) {
+            this.stopLikeProcess();
+        }
+    }
+
+    startLikeProcess() {
+        this.logActivity('מתחיל תהליך לייקים אוטומטיים');
+        this.likeInterval = setInterval(() => {
+            this.scanAndLikePosts();
+        }, 3000); // Check every 3 seconds
+    }
+
+    stopLikeProcess() {
+        if (this.likeInterval) {
+            clearInterval(this.likeInterval);
+            this.likeInterval = null;
+            this.logActivity('תהליך לייקים אוטומטיים נעצר');
+        }
+    }
+
+    async scanAndLikePosts() {
+        if (!this.isActive || !this.settings.autoLikes) return;
+
+        try {
+            const posts = this.findPosts();
+            
+            for (const post of posts) {
+                const postId = this.getPostId(post);
+                if (this.processedPosts.has(postId)) continue;
+
+                const shouldLike = await this.shouldLikePost(post);
+                if (shouldLike) {
+                    await this.performLike(post);
+                    this.processedPosts.add(postId);
+                    
+                    // Limit processed posts memory
+                    if (this.processedPosts.size > 100) {
+                        const firstItem = this.processedPosts.values().next().value;
+                        this.processedPosts.delete(firstItem);
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error in like scanning:', error);
+        }
+    }
+
+    findPosts() {
+        // Platform-specific selectors
+        const platformAgent = this.system.agents.get('platformDetectionAgent');
+        const platform = platformAgent?.currentPlatform || 'unknown';
+        
+        let selectors = [];
+        if (platform === 'linkedin') {
+            selectors = [
+                '.feed-shared-update-v2',
+                '[data-urn*="activity:"]'
+            ];
+        } else if (platform === 'facebook') {
+            selectors = [
+                '[data-pagelet="FeedUnit"]',
+                '[role="article"]'
+            ];
+        } else if (platform === 'x') {
+            selectors = [
+                '[data-testid="tweet"]',
+                'article[role="article"]'
+            ];
+        }
+
+        const posts = [];
+        for (const selector of selectors) {
+            posts.push(...document.querySelectorAll(selector));
+        }
+        
+        return posts.filter(post => this.isPostVisible(post));
+    }
+
+    isPostVisible(post) {
+        const rect = post.getBoundingClientRect();
+        return rect.top >= 0 && rect.bottom <= window.innerHeight;
+    }
+
+    getPostId(post) {
+        return post.getAttribute('data-urn') || 
+               post.getAttribute('data-testid') || 
+               post.getAttribute('id') || 
+               post.outerHTML.substring(0, 100);
+    }
+
+    async shouldLikePost(post) {
+        // Check if already liked
+        if (this.isAlreadyLiked(post)) return false;
+
+        // Use content analysis agent to decide
+        const contentAgent = this.system.agents.get('contentAnalysisAgent');
+        if (contentAgent) {
+            const postData = this.extractPostData(post);
+            const analysis = await contentAgent.analyzePost(postData);
+            return analysis?.shouldEngage || false;
+        }
+
+        // Fallback: like posts randomly (30% chance)
+        return Math.random() < 0.3;
+    }
+
+    isAlreadyLiked(post) {
+        const platformAgent = this.system.agents.get('platformDetectionAgent');
+        const platform = platformAgent?.currentPlatform || 'unknown';
+
+        let likedSelectors = [];
+        if (platform === 'linkedin') {
+            likedSelectors = [
+                '.react-button__trigger[aria-pressed="true"]',
+                '.reactions-icon[aria-pressed="true"]'
+            ];
+        } else if (platform === 'facebook') {
+            likedSelectors = [
+                '[aria-label*="Remove"][aria-label*="Like"]',
+                '[data-reaction-type]'
+            ];
+        } else if (platform === 'x') {
+            likedSelectors = [
+                '[data-testid="like"][aria-pressed="true"]',
+                '[aria-label*="Liked"]'
+            ];
+        }
+
+        for (const selector of likedSelectors) {
+            if (post.querySelector(selector)) return true;
+        }
+        return false;
+    }
+
+    async performLike(post) {
+        const platformAgent = this.system.agents.get('platformDetectionAgent');
+        const platform = platformAgent?.currentPlatform || 'unknown';
+
+        let likeSelectors = [];
+        if (platform === 'linkedin') {
+            likeSelectors = [
+                '.react-button__trigger:not([aria-pressed="true"])',
+                '.social-actions-button--reaction'
+            ];
+        } else if (platform === 'facebook') {
+            likeSelectors = [
+                '[aria-label*="Like"]',
+                '[data-testid="reaction-button"]'
+            ];
+        } else if (platform === 'x') {
+            likeSelectors = [
+                '[data-testid="like"]:not([aria-pressed="true"])',
+                '[aria-label*="Like"]'
+            ];
+        }
+
+        for (const selector of likeSelectors) {
+            const likeButton = post.querySelector(selector);
+            if (likeButton) {
+                likeButton.click();
+                this.logActivity(`לייק על ${platform}`);
+                
+                // Update stats
+                this.taskCount++;
+                
+                if (this.visualization) {
+                    this.visualization.likerActive(`לייק #${this.taskCount}`);
+                }
+                
+                // Add delay to look human
+                await this.humanDelay();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    extractPostData(post) {
+        const text = post.textContent || '';
+        const author = this.extractAuthor(post);
+        
+        return {
+            text: text.substring(0, 500),
+            author,
+            platform: this.system.agents.get('platformDetectionAgent')?.currentPlatform || 'unknown'
+        };
+    }
+
+    extractAuthor(post) {
+        const authorSelectors = [
+            '.feed-shared-actor__name',
+            '[data-testid="User-Name"]',
+            '.author-name'
+        ];
+
+        for (const selector of authorSelectors) {
+            const element = post.querySelector(selector);
+            if (element) return element.textContent.trim();
+        }
+        return 'Unknown';
+    }
+
+    async humanDelay() {
+        const delay = 1500 + Math.random() * 2000; // 1.5-3.5 seconds
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+}
+
+class CommentAgent extends BaseAIAgent {
+    constructor(system) {
+        super(system);
+        this.commentInterval = null;
+        this.processedPosts = new Set();
+    }
+
+    definePersonality() {
+        return {
+            role: 'Comment Agent',
+            traits: ['thoughtful', 'engaging', 'authentic'],
+            expertise: 'conversation'
+        };
+    }
+
+    getAgentIcon() { return '💬'; }
+
+    async start() {
+        await super.start();
+        if (this.settings.autoComments) {
+            this.startCommentProcess();
+        }
+    }
+
+    async stop() {
+        await super.stop();
+        if (this.commentInterval) {
+            clearInterval(this.commentInterval);
+            this.commentInterval = null;
+        }
+    }
+
+    updateSettings(settings) {
+        super.updateSettings(settings);
+        if (settings.autoComments && !this.commentInterval) {
+            this.startCommentProcess();
+        } else if (!settings.autoComments && this.commentInterval) {
+            this.stopCommentProcess();
+        }
+    }
+
+    startCommentProcess() {
+        this.logActivity('מתחיל תהליך תגובות אוטומטיות');
+        this.commentInterval = setInterval(() => {
+            this.scanAndCommentPosts();
+        }, 5000); // Check every 5 seconds
+    }
+
+    stopCommentProcess() {
+        if (this.commentInterval) {
+            clearInterval(this.commentInterval);
+            this.commentInterval = null;
+            this.logActivity('תהליך תגובות אוטומטיות נעצר');
+        }
+    }
+
+    async scanAndCommentPosts() {
+        if (!this.isActive || !this.settings.autoComments) return;
+
+        try {
+            const likeAgent = this.system.agents.get('likeAgent');
+            const posts = likeAgent ? likeAgent.findPosts() : [];
+            
+            for (const post of posts) {
+                const postId = likeAgent.getPostId(post);
+                if (this.processedPosts.has(postId)) continue;
+
+                const shouldComment = await this.shouldCommentPost(post);
+                if (shouldComment) {
+                    await this.generateAndPostComment(post);
+                    this.processedPosts.add(postId);
+                    
+                    // Limit memory
+                    if (this.processedPosts.size > 50) {
+                        const firstItem = this.processedPosts.values().next().value;
+                        this.processedPosts.delete(firstItem);
+                    }
+                    
+                    // Only comment on one post per cycle
+                    break;
+                }
+            }
+        } catch (error) {
+            console.error('Error in comment scanning:', error);
+        }
+    }
+
+    async shouldCommentPost(post) {
+        // Less frequent than likes (10% chance)
+        return Math.random() < 0.1;
+    }
+
+    async generateAndPostComment(post) {
+        try {
+            // Generate comment using background script
+            const postData = this.extractPostData(post);
+            const comment = await this.requestCommentGeneration(postData);
+            
+            if (comment) {
+                this.logActivity(`תגובה נוצרה: ${comment.substring(0, 30)}...`);
+                this.taskCount++;
+                
+                if (this.visualization) {
+                    this.visualization.commenterActive(`תגובה #${this.taskCount}`);
+                }
+            }
+        } catch (error) {
+            console.error('Error generating comment:', error);
+        }
+    }
+
+    async requestCommentGeneration(postData) {
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: 'GENERATE_COMMENT',
+                data: {
+                    postContent: postData.text,
+                    language: 'he'
+                }
+            });
+            
+            return response?.success ? response.comment : null;
+        } catch (error) {
+            console.error('Error requesting comment generation:', error);
+            return this.generateFallbackComment(postData);
+        }
+    }
+
+    generateFallbackComment(postData) {
+        const comments = [
+            'תודה על השיתוף המעניין!',
+            'נקודה מצוינת!',
+            'מסכים איתך לחלוטין',
+            'תובנה מעניינת',
+            'תודה על ההשראה'
+        ];
+        
+        return comments[Math.floor(Math.random() * comments.length)];
+    }
+
+    extractPostData(post) {
+        const likeAgent = this.system.agents.get('likeAgent');
+        return likeAgent ? likeAgent.extractPostData(post) : {
+            text: post.textContent?.substring(0, 500) || '',
+            author: 'Unknown',
+            platform: 'unknown'
+        };
+    }
+
+    async humanDelay() {
+        const delay = 2000 + Math.random() * 3000; // 2-5 seconds
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+}
+
+class PostScannerAgent extends BaseAIAgent {
+    constructor(system) {
+        super(system);
+        this.scanInterval = null;
+    }
+
+    definePersonality() {
+        return {
+            role: 'Post Scanner',
+            traits: ['observant', 'systematic', 'thorough'],
+            expertise: 'detection'
+        };
+    }
+
+    getAgentIcon() { return '🔍'; }
+
+    async start() {
+        await super.start();
+        this.startScanning();
+    }
+
+    async stop() {
+        await super.stop();
+        if (this.scanInterval) {
+            clearInterval(this.scanInterval);
+            this.scanInterval = null;
+        }
+    }
+
+    startScanning() {
+        this.logActivity('מתחיל סריקת פוסטים');
+        this.scanInterval = setInterval(() => {
+            this.scanPosts();
+        }, 2000); // Scan every 2 seconds
+    }
+
+    scanPosts() {
+        if (!this.isActive) return;
+
+        const likeAgent = this.system.agents.get('likeAgent');
+        if (likeAgent) {
+            const posts = likeAgent.findPosts();
+            if (posts.length > 0) {
+                this.logActivity(`נמצאו ${posts.length} פוסטים`);
+                
+                if (this.visualization) {
+                    this.visualization.scannerActive(`סרק ${posts.length} פוסטים`);
+                }
+            }
+        }
+    }
+}
+
 // Global export
 window.AISmartAgentsSystem = AISmartAgentsSystem;
 window.ScrollDecisionAgent = ScrollDecisionAgent;
@@ -699,5 +1157,8 @@ window.ContentAnalysisAgent = ContentAnalysisAgent;
 window.CommentQualityAgent = CommentQualityAgent;
 window.StrategyAgent = StrategyAgent;
 window.EngagementAnalysisAgent = EngagementAnalysisAgent;
+window.LikeAgent = LikeAgent;
+window.CommentAgent = CommentAgent;
+window.PostScannerAgent = PostScannerAgent;
 
 } // Close the if statement that prevents multiple initializations 

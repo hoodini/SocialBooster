@@ -453,6 +453,26 @@ class AIAgentsVisualization {
     analyzerStandby() {
         this.updateAgentStatus('analyzer', false);
     }
+
+    setSystemStatus(status) {
+        // Update system status display
+        const statusIndicator = this.agentPanel?.querySelector('.ai-status-indicator');
+        if (statusIndicator) {
+            if (status === 'פעילה' || status === 'active') {
+                statusIndicator.style.background = '#4ade80';
+                statusIndicator.style.animation = 'blink 1.5s infinite';
+            } else {
+                statusIndicator.style.background = '#ef4444';
+                statusIndicator.style.animation = 'none';
+            }
+        }
+        
+        // Update title if needed
+        const title = this.agentPanel?.querySelector('.ai-panel-title span:nth-child(2)');
+        if (title) {
+            title.textContent = status === 'פעילה' || status === 'active' ? 'YUV.AI Agents - Active' : 'YUV.AI Agents - Standby';
+        }
+    }
 }
 
 // יצוא גלובלי
