@@ -1,6 +1,12 @@
 // AI Platform Detection Agent - סוכן זיהוי פלטפורמה אוטומטי עם AI
 // מזהה אוטומטית את הפלטפורמה הנוכחית ומנהל state מתקדם
 
+// Prevent multiple initializations
+if (window.PlatformDetectionAgentLoaded) {
+    console.log('🔄 Platform Detection Agent already loaded, skipping...');
+} else {
+    window.PlatformDetectionAgentLoaded = true;
+
 class PlatformDetectionAgent {
     constructor() {
         this.currentPlatform = null;
@@ -449,4 +455,6 @@ class PlatformStateManager {
 
 // Export for use in main system
 window.PlatformDetectionAgent = PlatformDetectionAgent;
-window.PlatformStateManager = PlatformStateManager; 
+window.PlatformStateManager = PlatformStateManager;
+
+} // Close the if statement that prevents multiple initializations 

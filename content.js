@@ -1,6 +1,11 @@
 // YUV.AI SocialBot Pro - Content Script with AI Agents System
 // ארכיטקטורה חדשה עם מערכת סוכני AI מושלמת
 
+// Prevent multiple initializations
+if (window.YuvAISocialBotProInstance) {
+    console.log('🔄 YUV.AI SocialBot Pro already initialized, skipping...');
+} else {
+
 class YuvAISocialBotPro {
     constructor() {
         this.isActive = false;
@@ -580,6 +585,7 @@ class YuvAISocialBotPro {
 }
 
 // Enhanced Comment Generation for AI Agents System
+if (!window.CommentGeneratorExtensions) {
 class CommentGeneratorExtensions {
     static async generateReply(parentPostData, commentData) {
         // Generate contextual reply to a comment
@@ -642,18 +648,25 @@ if (window.CommentGeneratorAgent) {
     window.CommentGeneratorAgent.prototype.generateReply = CommentGeneratorExtensions.generateReply;
 }
 
+window.CommentGeneratorExtensions = CommentGeneratorExtensions;
+} // Close CommentGeneratorExtensions guard
+
 // Wait for DOM and initialize
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
-            new YuvAISocialBotPro();
+            const instance = new YuvAISocialBotPro();
+            window.YuvAISocialBotProInstance = instance;
         }, 1000);
     });
 } else {
     setTimeout(() => {
-        new YuvAISocialBotPro();
+        const instance = new YuvAISocialBotPro();
+        window.YuvAISocialBotProInstance = instance;
     }, 1000);
 }
 
 // Global access for debugging
-window.YuvAISocialBotPro = YuvAISocialBotPro; 
+window.YuvAISocialBotPro = YuvAISocialBotPro;
+
+} // Close the if statement that prevents multiple initializations 

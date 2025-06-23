@@ -1,6 +1,12 @@
 // AI Smart Agents - סוכני AI אמיתיים עם חשיבה
 // משתמשים ב-Cohere API v2 לקבלת החלטות חכמות
 
+// Prevent multiple initializations
+if (window.AISmartAgentsSystemLoaded) {
+    console.log('🔄 AI Smart Agents System already loaded, skipping...');
+} else {
+    window.AISmartAgentsSystemLoaded = true;
+
 class AISmartAgentsSystem {
     constructor() {
         this.agents = new Map();
@@ -692,4 +698,6 @@ window.ScrollDecisionAgent = ScrollDecisionAgent;
 window.ContentAnalysisAgent = ContentAnalysisAgent;
 window.CommentQualityAgent = CommentQualityAgent;
 window.StrategyAgent = StrategyAgent;
-window.EngagementAnalysisAgent = EngagementAnalysisAgent; 
+window.EngagementAnalysisAgent = EngagementAnalysisAgent;
+
+} // Close the if statement that prevents multiple initializations 

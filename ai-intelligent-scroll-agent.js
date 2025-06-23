@@ -1,6 +1,12 @@
 // AI Intelligent Scroll Agent - סוכן גלילה חכם עם Transformers.js
 // משתמש בזיהוי תוכן מקומי לקבלת החלטות גלילה מושכלות
 
+// Prevent multiple initializations
+if (window.IntelligentScrollAgentLoaded) {
+    console.log('🔄 Intelligent Scroll Agent already loaded, skipping...');
+} else {
+    window.IntelligentScrollAgentLoaded = true;
+
 class IntelligentScrollAgent {
     constructor() {
         this.isActive = false;
@@ -435,4 +441,6 @@ class IntelligentScrollAgent {
 }
 
 // Export for use in main system
-window.IntelligentScrollAgent = IntelligentScrollAgent; 
+window.IntelligentScrollAgent = IntelligentScrollAgent;
+
+} // Close the if statement that prevents multiple initializations 
