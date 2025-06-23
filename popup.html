@@ -127,19 +127,24 @@
                 </div>
             </div>
 
-            <div class="platform-selection">
-                <h4 data-translate="platformsTitle">פלטפורמות:</h4>
-                <div class="platform-options">
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="linkedinEnabled" checked />
-                        <span class="checkmark"></span>
-                        LinkedIn
-                    </label>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="facebookEnabled" />
-                        <span class="checkmark"></span>
-                        Facebook
-                    </label>
+            <div class="platform-detection">
+                <h4 data-translate="currentPlatformTitle">🌐 פלטפורמה נוכחית:</h4>
+                <div class="platform-status">
+                    <div class="platform-indicator">
+                        <span id="currentPlatformIcon">🔍</span>
+                        <span id="currentPlatformName" data-translate="detecting">מזהה פלטפורמה...</span>
+                        <span id="platformConfidence" class="confidence-badge">-</span>
+                    </div>
+                    <div class="platform-features" id="platformFeatures">
+                        <span class="feature-badge">📜 גלילה חכמה</span>
+                        <span class="feature-badge">❤️ לייקים</span>
+                        <span class="feature-badge">💬 תגובות AI</span>
+                    </div>
+                </div>
+                <div class="platform-description">
+                    <small data-translate="platformAutoDetection">
+                        💡 הפלטפורמה מזוהה אוטומטית על ידי AI. תומך בלינקדאין, פייסבוק ו-X (טוויטר)
+                    </small>
                 </div>
             </div>
 

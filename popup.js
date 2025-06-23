@@ -802,9 +802,7 @@ class SocialBotPopup {
                 'autoLikes': this.settings.autoLikes,
                 'autoComments': this.settings.autoComments,
                 'autoScroll': this.settings.autoScroll,
-                'preferHeartReaction': this.settings.preferHeartReaction,
-                'linkedinEnabled': this.settings.linkedinEnabled,
-                'facebookEnabled': this.settings.facebookEnabled
+                'preferHeartReaction': this.settings.preferHeartReaction
             };
             
             Object.entries(elements).forEach(([id, checked]) => {
@@ -823,10 +821,70 @@ class SocialBotPopup {
             // עדכון global toggle UI
             this.updateGlobalToggleUI(this.settings.globallyEnabled);
             
+            // עדכון פלטפורמה נוכחית
+            this.updateCurrentPlatformDisplay();
+            
             console.log('✅ UI updated');
             
         } catch (error) {
             console.error('❌ Error updating UI:', error);
+        }
+    }
+
+    async updateCurrentPlatformDisplay() {
+        try {
+            const activeTab = await this.getActiveTab();
+            const platformIcon = document.getElementById('currentPlatformIcon');
+            const platformName = document.getElementById('currentPlatformName');
+            const platformConfidence = document.getElementById('platformConfidence');
+            const platformDetection = document.querySelector('.platform-detection');
+            
+            if (!activeTab) {
+                if (platformIcon) platformIcon.textContent = '🔍';
+                if (platformName) platformName.textContent = 'פתח LinkedIn, Facebook או X (Twitter)';
+                if (platformConfidence) platformConfidence.textContent = '-';
+                if (platformDetection) platformDetection.className = 'platform-detection platform-unknown';
+                return;
+            }
+            
+            // זיהוי פלטפורמה
+            let platform = 'unknown';
+            let displayName = 'לא זוהה';
+            let icon = '🔍';
+            let confidence = '-';
+            
+            if (activeTab.url.includes('linkedin.com')) {
+                platform = 'linkedin';
+                displayName = 'LinkedIn';
+                icon = '💼';
+                confidence = '95%';
+            } else if (activeTab.url.includes('facebook.com')) {
+                platform = 'facebook';
+                displayName = 'Facebook';
+                icon = '📘';
+                confidence = '95%';
+            } else if (activeTab.url.includes('x.com') || activeTab.url.includes('twitter.com')) {
+                platform = 'x';
+                displayName = 'X (Twitter)';
+                icon = '🐦';
+                confidence = '95%';
+            }
+            
+            // עדכון UI
+            if (platformIcon) platformIcon.textContent = icon;
+            if (platformName) platformName.textContent = displayName;
+            if (platformConfidence) {
+                platformConfidence.textContent = confidence;
+                platformConfidence.className = 'confidence-badge high';
+            }
+            if (platformDetection) {
+                platformDetection.className = `platform-detection platform-${platform}`;
+            }
+            
+            console.log(`🌐 Platform detected: ${platform} (${displayName})`);
+            
+        } catch (error) {
+            console.error('❌ Error updating platform display:', error);
         }
     }
 
@@ -1045,7 +1103,12 @@ class SocialBotPopup {
             // שליחת הודעה לכל הטאבים הפעילים
             const tabs = await chrome.tabs.query({});
             for (const tab of tabs) {
-                if (tab.url && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
+                if (tab.url && (
+                    tab.url.includes('linkedin.com') || 
+                    tab.url.includes('facebook.com') ||
+                    tab.url.includes('x.com') ||
+                    tab.url.includes('twitter.com')
+                )) {
                     try {
                         await chrome.tabs.sendMessage(tab.id, {
                             type: 'TOGGLE_AUTO_SCROLL',
@@ -1071,7 +1134,12 @@ class SocialBotPopup {
 
     async getActiveTab() {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab && (tab.url.includes('linkedin.com') || tab.url.includes('facebook.com'))) {
+        if (tab && (
+            tab.url.includes('linkedin.com') || 
+            tab.url.includes('facebook.com') ||
+            tab.url.includes('x.com') ||
+            tab.url.includes('twitter.com')
+        )) {
             return tab;
         }
         return null;

@@ -17,8 +17,14 @@ class AISmartAgentsSystem {
         // Load API key
         await this.loadCohereApiKey();
         
-        // Wait for Intelligent Scroll Agent to be available
-        await this.waitForIntelligentScrollAgent();
+        // Wait for dependencies to be available
+        await this.waitForDependencies();
+        
+        // Initialize platform detection agent first
+        this.agents.set('platformDetectionAgent', new PlatformDetectionAgent()); // 🔍 Auto platform detection
+        
+        // Wait for platform detection to complete
+        await this.waitForPlatformDetection();
         
         // Initialize smart AI agents
         this.agents.set('intelligentScrollAgent', new IntelligentScrollAgent()); // 🧠 New AI-powered scrolling
@@ -28,7 +34,7 @@ class AISmartAgentsSystem {
         this.agents.set('strategyAgent', new StrategyAgent(this));
         this.agents.set('engagementAnalysisAgent', new EngagementAnalysisAgent(this));
         
-        console.log('🧠 AI Smart Agents initialized with Transformers.js + Cohere API v2');
+        console.log('🧠 AI Smart Agents initialized with Platform Detection + Transformers.js + Cohere API v2');
     }
 
     async loadCohereApiKey() {
@@ -42,17 +48,38 @@ class AISmartAgentsSystem {
         }
     }
 
-    async waitForIntelligentScrollAgent() {
+    async waitForDependencies() {
         let attempts = 0;
         const maxAttempts = 50;
         
-        while (!window.IntelligentScrollAgent && attempts < maxAttempts) {
+        while ((!window.IntelligentScrollAgent || !window.PlatformDetectionAgent) && attempts < maxAttempts) {
             await new Promise(resolve => setTimeout(resolve, 100));
             attempts++;
         }
         
         if (!window.IntelligentScrollAgent) {
             console.warn('⚠️ IntelligentScrollAgent not loaded, will use fallback');
+        }
+        
+        if (!window.PlatformDetectionAgent) {
+            console.warn('⚠️ PlatformDetectionAgent not loaded, will use fallback');
+        }
+    }
+
+    async waitForPlatformDetection() {
+        const platformAgent = this.agents.get('platformDetectionAgent');
+        if (!platformAgent) return;
+        
+        let attempts = 0;
+        const maxAttempts = 30;
+        
+        while (!platformAgent.isInitialized && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            attempts++;
+        }
+        
+        if (!platformAgent.isInitialized) {
+            console.warn('⚠️ Platform detection timed out, continuing with unknown platform');
         }
     }
 

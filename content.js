@@ -21,6 +21,10 @@ class YuvAISocialBotPro {
             
             // Initialize Smart AI Agents System 🧠
             this.smartAgentsSystem = new AISmartAgentsSystem();
+            await this.smartAgentsSystem.initializeSmartAgents(); // Make sure initialization completes
+            
+            // Setup platform change listener for dynamic platform switching
+            this.setupPlatformChangeListener();
             
             // Initialize visualization first
             await this.initializeVisualization();
@@ -28,7 +32,7 @@ class YuvAISocialBotPro {
             // Setup message listeners
             this.setupMessageListeners();
             
-            // Load settings
+            // Load settings with platform-aware state management
             await this.loadSettings();
             
             // Setup Smart AI Agents with visualization and settings
@@ -40,7 +44,7 @@ class YuvAISocialBotPro {
                 await this.start();
             }
             
-            console.log('✅ YUV.AI SocialBot Pro with Smart AI Agents initialized successfully');
+            console.log('✅ YUV.AI SocialBot Pro with Smart AI Agents + Platform Detection initialized successfully');
             
         } catch (error) {
             console.error('❌ Failed to initialize YUV.AI SocialBot Pro:', error);
@@ -246,7 +250,10 @@ class YuvAISocialBotPro {
                 };
             }
             
-            console.log('⚙️ Settings loaded:', this.settings);
+            // Load platform-specific state if available
+            await this.loadPlatformSpecificState();
+            
+            console.log('⚙️ Settings loaded with platform state:', this.settings);
         } catch (error) {
             console.error('Failed to load settings:', error);
             // Use default settings
@@ -258,6 +265,31 @@ class YuvAISocialBotPro {
                 scrollSpeed: 2,
                 heartReaction: true
             };
+        }
+    }
+
+    async loadPlatformSpecificState() {
+        // Load platform-specific settings and state
+        const platformAgent = this.smartAgentsSystem?.agents?.get('platformDetectionAgent');
+        if (!platformAgent) return;
+        
+        try {
+            const platformState = platformAgent.platformState || {};
+            
+            // If platform has saved settings, merge them
+            if (platformState.settings) {
+                this.settings = { ...this.settings, ...platformState.settings };
+            }
+            
+            // If platform has saved active state, use it
+            if (platformState.isActive !== undefined) {
+                this.isActive = platformState.isActive;
+            }
+            
+            console.log(`📦 Loaded platform-specific state for ${platformAgent.currentPlatform}:`, platformState);
+            
+        } catch (error) {
+            console.warn('⚠️ Failed to load platform-specific state:', error);
         }
     }
 
@@ -390,15 +422,72 @@ class YuvAISocialBotPro {
         };
     }
 
-    detectPlatform() {
+    setupPlatformChangeListener() {
+        // Listen for platform changes from the Platform Detection Agent
+        window.addEventListener('yuvai-platform-changed', async (event) => {
+            const { platform, config, state } = event.detail;
+            
+            console.log(`🔄 Platform changed to: ${platform}`);
+            
+            // Update current platform
+            this.platform = platform;
+            
+            // Save current settings state to old platform
+            await this.savePlatformState();
+            
+            // Load settings for new platform
+            await this.loadSettings();
+            
+            // Update Smart AI Agents with new settings
+            if (this.smartAgentsSystem) {
+                this.smartAgentsSystem.setSettings(this.settings);
+            }
+            
+            // Restart system if it was active
+            if (this.isActive) {
+                await this.stop();
+                await this.start();
+            }
+            
+            if (this.visualization) {
+                this.visualization.addActivity(`🌐 עבר ל${config.displayName}`);
+            }
+        });
+    }
+
+    getCurrentPlatform() {
+        // Get current platform from Platform Detection Agent
+        const platformAgent = this.smartAgentsSystem?.agents?.get('platformDetectionAgent');
+        return platformAgent?.currentPlatform || this.detectPlatformFallback();
+    }
+
+    detectPlatformFallback() {
         const hostname = window.location.hostname.toLowerCase();
         
         if (hostname.includes('linkedin.com')) {
             return 'linkedin';
         } else if (hostname.includes('facebook.com')) {
             return 'facebook';
+        } else if (hostname.includes('x.com') || hostname.includes('twitter.com')) {
+            return 'x';
         } else {
             return 'unknown';
+        }
+    }
+
+    async savePlatformState() {
+        // Save current settings to platform-specific state
+        const platformAgent = this.smartAgentsSystem?.agents?.get('platformDetectionAgent');
+        if (!platformAgent) return;
+        
+        try {
+            await platformAgent.savePlatformState({
+                settings: this.settings,
+                isActive: this.isActive,
+                lastUsed: Date.now()
+            });
+        } catch (error) {
+            console.warn('⚠️ Failed to save platform state:', error);
         }
     }
 

@@ -593,15 +593,130 @@ textarea {
     font-size: 12px;
 }
 
-.automation-options,
-.platform-options {
+.automation-options {
     display: flex;
     flex-direction: column;
     gap: 10px;
 }
 
-.platform-options {
-    padding-right: 20px;
+/* Platform Detection Styles */
+.platform-detection {
+    margin-top: 15px;
+    padding: 15px;
+    background: linear-gradient(135deg, rgba(116, 185, 255, 0.1) 0%, rgba(102, 126, 234, 0.1) 100%);
+    border-radius: 12px;
+    border: 1px solid rgba(116, 185, 255, 0.2);
+}
+
+.platform-detection h4 {
+    margin: 0 0 12px 0;
+    color: #2d3436;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.platform-status {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.platform-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid rgba(116, 185, 255, 0.2);
+}
+
+#currentPlatformIcon {
+    font-size: 18px;
+    animation: detectingPulse 2s infinite ease-in-out;
+}
+
+#currentPlatformName {
+    flex: 1;
+    font-weight: 500;
+    color: #2d3436;
+}
+
+.confidence-badge {
+    background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 35px;
+    text-align: center;
+}
+
+.confidence-badge.high {
+    background: linear-gradient(135deg, #00b894 0%, #00cec9 100%);
+}
+
+.confidence-badge.medium {
+    background: linear-gradient(135deg, #fdcb6e 0%, #f39c12 100%);
+}
+
+.confidence-badge.low {
+    background: linear-gradient(135deg, #e17055 0%, #d63031 100%);
+}
+
+.platform-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.feature-badge {
+    background: rgba(116, 185, 255, 0.2);
+    color: #2d3436;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+    border: 1px solid rgba(116, 185, 255, 0.3);
+}
+
+.platform-description {
+    margin-top: 8px;
+    text-align: center;
+}
+
+.platform-description small {
+    color: #636e72;
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+@keyframes detectingPulse {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.1); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+/* Platform-specific icons and colors */
+.platform-linkedin #currentPlatformIcon {
+    color: #0077b5;
+    animation: none;
+}
+
+.platform-facebook #currentPlatformIcon {
+    color: #1877f2;
+    animation: none;
+}
+
+.platform-x #currentPlatformIcon {
+    color: #1da1f2;
+    animation: none;
+}
+
+.platform-unknown #currentPlatformIcon {
+    color: #fd79a8;
+    animation: detectingPulse 2s infinite ease-in-out;
 }
 
 /* Statistics */
