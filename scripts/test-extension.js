@@ -140,7 +140,7 @@ runTest('Content script functionality', () => {
     const contentContent = fs.readFileSync(contentPath, 'utf8');
     
     const requiredFunctions = [
-        'detectPlatform',
+        'detectPlatformFallback',
         'handleScroll',
         'processAutoLike',
         'processAutoComment',
@@ -175,9 +175,7 @@ runTest('Popup interface validation', () => {
         'apiKey',
         'personaSelect',
         'autoLikes',
-        'autoComments',
-        'linkedinEnabled',
-        'facebookEnabled'
+        'autoComments'
     ];
     
     const missingElements = requiredElements.filter(element => 

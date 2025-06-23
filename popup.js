@@ -180,8 +180,7 @@ class SocialBotPopup {
                     autoScroll: this.settings.autoScroll,
                     scrollSpeed: this.settings.scrollSpeed,
                     language: this.settings.language,
-                    linkedinEnabled: this.settings.linkedinEnabled,
-                    facebookEnabled: this.settings.facebookEnabled,
+
                     preferHeartReaction: this.settings.preferHeartReaction
                 }
             });
@@ -266,8 +265,6 @@ class SocialBotPopup {
                 'selectedPersonaId',
                 'autoLikes',
                 'autoComments', 
-                'linkedinEnabled',
-                'facebookEnabled',
                 'preferHeartReaction',
                 'globallyEnabled',
                 'autoScrollEnabled',
@@ -309,8 +306,6 @@ class SocialBotPopup {
             document.getElementById('autoLikes').checked = result.autoLikes || false;
             document.getElementById('autoComments').checked = result.autoComments || false;
             document.getElementById('preferHeartReaction').checked = result.preferHeartReaction || false;
-            document.getElementById('linkedinEnabled').checked = result.linkedinEnabled !== false;
-            document.getElementById('facebookEnabled').checked = result.facebookEnabled || false;
 
             // Load global toggle state
             const globallyEnabled = result.globallyEnabled !== false; // Default to true
@@ -362,8 +357,6 @@ class SocialBotPopup {
             document.getElementById('autoLikes').addEventListener('change', () => this.saveAutomationSettings());
             document.getElementById('autoComments').addEventListener('change', () => this.saveAutomationSettings());
             document.getElementById('preferHeartReaction').addEventListener('change', () => this.saveAutomationSettings());
-            document.getElementById('linkedinEnabled').addEventListener('change', () => this.saveAutomationSettings());
-            document.getElementById('facebookEnabled').addEventListener('change', () => this.saveAutomationSettings());
 
             // Dashboard
             document.getElementById('dashboardBtn').addEventListener('click', () => this.openDashboard());
@@ -684,9 +677,7 @@ class SocialBotPopup {
         const settings = {
             autoLikes: document.getElementById('autoLikes').checked,
             autoComments: document.getElementById('autoComments').checked,
-            preferHeartReaction: document.getElementById('preferHeartReaction').checked,
-            linkedinEnabled: document.getElementById('linkedinEnabled').checked,
-            facebookEnabled: document.getElementById('facebookEnabled').checked
+            preferHeartReaction: document.getElementById('preferHeartReaction').checked
         };
 
         await chrome.storage.sync.set(settings);
@@ -709,9 +700,7 @@ class SocialBotPopup {
         const settings = {
             autoLikes: document.getElementById('autoLikes').checked,
             autoComments: document.getElementById('autoComments').checked,
-            preferHeartReaction: document.getElementById('preferHeartReaction').checked,
-            linkedinEnabled: document.getElementById('linkedinEnabled').checked,
-            facebookEnabled: document.getElementById('facebookEnabled').checked
+            preferHeartReaction: document.getElementById('preferHeartReaction').checked
         };
 
         await chrome.storage.sync.set(settings);
@@ -1154,8 +1143,6 @@ class SocialBotPopup {
                 'autoScroll',
                 'scrollSpeed',
                 'language',
-                'linkedinEnabled',
-                'facebookEnabled',
                 'preferHeartReaction'
             ]);
             
@@ -1166,8 +1153,6 @@ class SocialBotPopup {
                 autoScroll: stored.autoScroll !== false,
                 scrollSpeed: stored.scrollSpeed || 2,
                 language: stored.language || 'he',
-                linkedinEnabled: stored.linkedinEnabled !== false,
-                facebookEnabled: stored.facebookEnabled !== false,
                 preferHeartReaction: stored.preferHeartReaction !== false
             };
             
@@ -1183,8 +1168,6 @@ class SocialBotPopup {
                 autoScroll: false,
                 scrollSpeed: 2,
                 language: 'he',
-                linkedinEnabled: true,
-                facebookEnabled: true,
                 preferHeartReaction: false
             };
         }

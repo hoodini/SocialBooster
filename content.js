@@ -1,10 +1,13 @@
 // YUV.AI SocialBot Pro - Content Script with AI Agents System
 // ארכיטקטורה חדשה עם מערכת סוכני AI מושלמת
 
-// Prevent multiple initializations
+// Prevent multiple initializations with stronger protection
 if (window.YuvAISocialBotProInstance) {
     console.log('🔄 YUV.AI SocialBot Pro already initialized, skipping...');
 } else {
+
+// Additional protection against redeclaration
+if (!window.YuvAISocialBotProClass) {
 
 class YuvAISocialBotPro {
     constructor() {
@@ -12,8 +15,8 @@ class YuvAISocialBotPro {
         this.settings = {};
         this.smartAgentsSystem = null;  // 🧠 מערכת סוכנים חכמים עם AI
         this.visualization = null;
-        this.platform = this.detectPlatform();
-        this.extensionId = chrome.runtime.id;
+        this.platform = this.detectPlatformFallback(); // Use fallback initially
+        this.extensionId = chrome.runtime?.id || 'unknown';
         
         console.log('🧠 YUV.AI SocialBot Pro initializing with Smart AI Agents...');
         this.init();
@@ -27,6 +30,9 @@ class YuvAISocialBotPro {
             // Initialize Smart AI Agents System 🧠
             this.smartAgentsSystem = new AISmartAgentsSystem();
             await this.smartAgentsSystem.initializeSmartAgents(); // Make sure initialization completes
+            
+            // Update platform using proper detection agent
+            this.updatePlatformFromAgent();
             
             // Setup platform change listener for dynamic platform switching
             this.setupPlatformChangeListener();
@@ -53,6 +59,29 @@ class YuvAISocialBotPro {
             
         } catch (error) {
             console.error('❌ Failed to initialize YUV.AI SocialBot Pro:', error);
+        }
+    }
+
+    updatePlatformFromAgent() {
+        // Get current platform from Platform Detection Agent
+        const platformAgent = this.smartAgentsSystem?.agents?.get('platformDetectionAgent');
+        if (platformAgent && platformAgent.currentPlatform) {
+            this.platform = platformAgent.currentPlatform;
+            console.log('🌐 Platform updated from agent:', this.platform);
+        }
+    }
+
+    detectPlatformFallback() {
+        const hostname = window.location.hostname.toLowerCase();
+        
+        if (hostname.includes('linkedin.com')) {
+            return 'linkedin';
+        } else if (hostname.includes('facebook.com')) {
+            return 'facebook';
+        } else if (hostname.includes('x.com') || hostname.includes('twitter.com')) {
+            return 'x';
+        } else {
+            return 'unknown';
         }
     }
 
@@ -466,20 +495,6 @@ class YuvAISocialBotPro {
         return platformAgent?.currentPlatform || this.detectPlatformFallback();
     }
 
-    detectPlatformFallback() {
-        const hostname = window.location.hostname.toLowerCase();
-        
-        if (hostname.includes('linkedin.com')) {
-            return 'linkedin';
-        } else if (hostname.includes('facebook.com')) {
-            return 'facebook';
-        } else if (hostname.includes('x.com') || hostname.includes('twitter.com')) {
-            return 'x';
-        } else {
-            return 'unknown';
-        }
-    }
-
     async savePlatformState() {
         // Save current settings to platform-specific state
         const platformAgent = this.smartAgentsSystem?.agents?.get('platformDetectionAgent');
@@ -668,5 +683,8 @@ if (document.readyState === 'loading') {
 
 // Global access for debugging
 window.YuvAISocialBotPro = YuvAISocialBotPro;
+window.YuvAISocialBotProClass = YuvAISocialBotPro; // Mark class as declared
+
+} // Close class protection guard
 
 } // Close the if statement that prevents multiple initializations 

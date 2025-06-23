@@ -58,8 +58,6 @@ class SocialBotBackground {
         const defaultSettings = {
             autoLikes: false,
             autoComments: false,
-            linkedinEnabled: true,
-            facebookEnabled: false,
             aiInsights: true,
             advancedAnalytics: true,
             multiAgentSystem: true,
@@ -257,8 +255,6 @@ class SocialBotBackground {
         return await chrome.storage.sync.get([
             'autoLikes',
             'autoComments',
-            'linkedinEnabled',
-            'facebookEnabled',
             'selectedPersonaId',
             'personas'
         ]);
