@@ -178,14 +178,29 @@ class YuvAISocialBotPro {
     async handleAutoScrollChange() {
         if (!this.smartAgentsSystem) return;
         
+        // Try to use the new intelligent scroll agent first
+        const intelligentScrollAgent = this.smartAgentsSystem.agents.get('intelligentScrollAgent');
         const scrollDecisionAgent = this.smartAgentsSystem.agents.get('scrollDecisionAgent');
-        if (!scrollDecisionAgent) return;
         
         if (this.settings.autoScroll && this.isActive) {
-            await scrollDecisionAgent.start();
-            this.startSmartScrolling();
+            // Prefer intelligent scroll agent
+            if (intelligentScrollAgent) {
+                await intelligentScrollAgent.start();
+                if (this.visualization) {
+                    this.visualization.addActivity('🧠 גלילה חכמה עם Transformers.js התחילה');
+                }
+            } else if (scrollDecisionAgent) {
+                await scrollDecisionAgent.start();
+                this.startSmartScrolling();
+            }
         } else {
-            await scrollDecisionAgent.stop();
+            // Stop both agents
+            if (intelligentScrollAgent) {
+                await intelligentScrollAgent.stop();
+            }
+            if (scrollDecisionAgent) {
+                await scrollDecisionAgent.stop();
+            }
             this.stopSmartScrolling();
         }
     }

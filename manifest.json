@@ -14,8 +14,13 @@
     "https://linkedin.com/*",
     "https://www.facebook.com/*",
     "https://facebook.com/*",
-    "https://api.cohere.com/*"
+    "https://api.cohere.com/*",
+    "https://cdn.jsdelivr.net/*",
+    "https://huggingface.co/*"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' https://cdn.jsdelivr.net; object-src 'self'; worker-src 'self' blob:"
+  },
   "content_scripts": [
     {
       "matches": [
@@ -24,7 +29,7 @@
         "https://www.facebook.com/*",
         "https://facebook.com/*"
       ],
-      "js": ["translations.js", "ai-agents-system.js", "ai-smart-agents.js", "ai-agents-visualization.js", "content.js"],
+      "js": ["translations.js", "ai-agents-system.js", "ai-smart-agents.js", "ai-intelligent-scroll-agent.js", "ai-agents-visualization.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }
@@ -48,7 +53,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "db.js", "dashboard.html", "dashboard.css", "dashboard.js", "translations.js", "ai-agents-system.js", "ai-smart-agents.js", "ai-agents-visualization.js"],
+      "resources": ["icons/*", "db.js", "dashboard.html", "dashboard.css", "dashboard.js", "translations.js", "ai-agents-system.js", "ai-smart-agents.js", "ai-intelligent-scroll-agent.js", "ai-agents-visualization.js"],
       "matches": ["<all_urls>"]
     }
   ]

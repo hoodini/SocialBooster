@@ -17,14 +17,18 @@ class AISmartAgentsSystem {
         // Load API key
         await this.loadCohereApiKey();
         
+        // Wait for Intelligent Scroll Agent to be available
+        await this.waitForIntelligentScrollAgent();
+        
         // Initialize smart AI agents
-        this.agents.set('scrollDecisionAgent', new ScrollDecisionAgent(this));
+        this.agents.set('intelligentScrollAgent', new IntelligentScrollAgent()); // 🧠 New AI-powered scrolling
+        this.agents.set('scrollDecisionAgent', new ScrollDecisionAgent(this));   // Legacy backup
         this.agents.set('contentAnalysisAgent', new ContentAnalysisAgent(this));
         this.agents.set('commentQualityAgent', new CommentQualityAgent(this));
         this.agents.set('strategyAgent', new StrategyAgent(this));
         this.agents.set('engagementAnalysisAgent', new EngagementAnalysisAgent(this));
         
-        console.log('🧠 AI Smart Agents initialized with Cohere API v2');
+        console.log('🧠 AI Smart Agents initialized with Transformers.js + Cohere API v2');
     }
 
     async loadCohereApiKey() {
@@ -38,17 +42,35 @@ class AISmartAgentsSystem {
         }
     }
 
+    async waitForIntelligentScrollAgent() {
+        let attempts = 0;
+        const maxAttempts = 50;
+        
+        while (!window.IntelligentScrollAgent && attempts < maxAttempts) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            attempts++;
+        }
+        
+        if (!window.IntelligentScrollAgent) {
+            console.warn('⚠️ IntelligentScrollAgent not loaded, will use fallback');
+        }
+    }
+
     setVisualization(visualization) {
         this.visualization = visualization;
         for (const agent of this.agents.values()) {
-            agent.setVisualization(visualization);
+            if (agent.setVisualization) {
+                agent.setVisualization(visualization);
+            }
         }
     }
 
     setSettings(settings) {
         this.settings = settings;
         for (const agent of this.agents.values()) {
-            agent.updateSettings(settings);
+            if (agent.updateSettings) {
+                agent.updateSettings(settings);
+            }
         }
     }
 
