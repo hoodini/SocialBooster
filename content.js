@@ -283,6 +283,11 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             this.currentPersonaId = null;
             this.isGloballyEnabled = true;
             
+            // AI Agents Visualization System
+            this.aiAgents = null;
+            this.postScanCount = 0; // למניעת מחזורים אינסופיים
+            this.lastPostScanTime = 0; // למניעת סריקות מהירות מדי
+            
             this.init();
             return this;
         }
@@ -297,15 +302,20 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             this.processCommentQueue();
             this.startSessionTracking();
             
-            // אתחול גלילה אוטומטית אם מופעלת
-            if (this.autoScrollEnabled && this.isGloballyEnabled) {
+            // אתחול מערכת AI Agents Visualization
+            this.initAIAgentsVisualization();
+            
+            // אתחול גלילה אוטומטית אם מופעלת - תיקון הבעיה
+            if (this.settings.autoScroll && this.settings.globallyEnabled) {
                 console.log('🚀 Auto-scroll enabled, starting...');
+                this.autoScrollEnabled = true;
                 setTimeout(() => this.startAutoScroll(), 3000); // התחלה אחרי 3 שניות
             } else {
                 console.log('📜 Auto-scroll disabled:', {
-                    autoScrollEnabled: this.autoScrollEnabled,
-                    globallyEnabled: this.isGloballyEnabled
+                    autoScrollSetting: this.settings.autoScroll,
+                    globallyEnabled: this.settings.globallyEnabled
                 });
+                this.autoScrollEnabled = false;
             }
         }
 
@@ -382,6 +392,23 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
             if (hostname.includes('linkedin.com')) return 'linkedin';
             if (hostname.includes('facebook.com')) return 'facebook';
             return 'unknown';
+        }
+
+        initAIAgentsVisualization() {
+            try {
+                if (typeof AIAgentsVisualization !== 'undefined') {
+                    this.aiAgents = new AIAgentsVisualization();
+                    console.log('🤖 AI Agents Visualization initialized');
+                    
+                    // הראה שהמערכת פעילה
+                    this.aiAgents.addActivity('מערכת AI Agents מוכנה לפעולה');
+                    this.aiAgents.scannerActive('מערכת מתחילה לפעול');
+                } else {
+                    console.log('⚠️ AIAgentsVisualization not available');
+                }
+            } catch (error) {
+                console.error('Failed to initialize AI Agents Visualization:', error);
+            }
         }
 
         async loadSettings() {
@@ -505,7 +532,7 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                     }
                     break;
                 case 'TOGGLE_AUTO_SCROLL':
-                    this.autoScrollEnabled = message.enabled;
+                    this.autoScrollEnabled = message.enabled !== false;
                     this.autoScrollSpeed = message.speed || 1;
                     console.log('📜 Auto-scroll state changed:', this.autoScrollEnabled ? 'ENABLED' : 'DISABLED', 'Speed:', this.autoScrollSpeed);
                     if (this.autoScrollEnabled && this.isGloballyEnabled) {
@@ -850,13 +877,19 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 const timer = { startTime: Date.now(), likeProcessed: false, commentProcessed: false, element: postElement };
                 this.viewTimers.set(postId, timer);
 
+                const author = this.extractPostAuthor(postElement);
                 console.log('📄 New post detected:', {
                     postId: postId.substring(0, 20) + '...',
                     platform: this.platform,
                     autoLikes: this.settings.autoLikes,
                     autoComments: this.settings.autoComments,
-                    author: this.extractPostAuthor(postElement)
+                    author: author
                 });
+                
+                // עדכון AI Agents
+                if (this.aiAgents) {
+                    this.aiAgents.scannerActive(`נמצא פוסט חדש מאת ${author}`);
+                }
 
                 // רישום הפוסט שנצפה
                 if (this.sessionData) {
@@ -866,6 +899,9 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
 
                 if (this.settings.autoLikes) {
                     console.log('👍 Scheduling auto-like in 1.5 seconds...');
+                    if (this.aiAgents) {
+                        this.aiAgents.likerActive('מתכונן לתת לייק');
+                    }
                     setTimeout(() => this.processAutoLike(postId, postElement), 1500);
                 } else {
                     console.log('👍 Auto-likes disabled');
@@ -878,6 +914,9 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                         currentPersonaId: this.currentPersonaId,
                         personasCount: this.personas ? this.personas.length : 0
                     });
+                    if (this.aiAgents) {
+                        this.aiAgents.commenterActive('מתכונן ליצור תגובה חכמה');
+                    }
                     setTimeout(() => this.processAutoComment(postId, postElement), 3000);
                 } else {
                     console.log('💬 Auto-comments disabled');
@@ -1492,8 +1531,48 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         // Helper methods for analytics data extraction
         extractPostAuthor(postElement) {
             if (this.platform === 'linkedin') {
-                const authorElement = postElement.querySelector('.feed-shared-actor__name, .update-components-actor__name, .feed-shared-actor__title');
-                return authorElement ? authorElement.textContent.trim() : 'Unknown Author';
+                // סלקטורים מרובים לזיהוי המחבר
+                const selectors = [
+                    '.feed-shared-actor__name',
+                    '.update-components-actor__name', 
+                    '.feed-shared-actor__title',
+                    '[data-test-id="post-author-name"]',
+                    '.feed-shared-actor__container-link .visually-hidden',
+                    '.update-components-actor__container .visually-hidden',
+                    'a[data-control-name="actor"] .visually-hidden',
+                    '.update-components-actor__name a',
+                    '.feed-shared-actor__name a',
+                    '.feed-shared-actor__name span',
+                    '.artdeco-entity-lockup__title',
+                    '.feed-shared-actor__container-link',
+                    'span[dir="ltr"]'
+                ];
+                
+                for (const selector of selectors) {
+                    const element = postElement.querySelector(selector);
+                    if (element && element.textContent.trim() && element.textContent.trim() !== '') {
+                        let authorName = element.textContent.trim();
+                        // נקה את הטקסט מתווים מיותרים
+                        authorName = authorName.replace(/\s+/g, ' ').replace(/^\s*View\s*/i, '').replace(/\s*profile.*$/i, '');
+                        if (authorName.length > 2 && !authorName.includes('View') && !authorName.includes('profile')) {
+                            console.log('✅ Found author name:', authorName, 'using selector:', selector);
+                            return authorName;
+                        }
+                    }
+                }
+                
+                // נסה למצוא באמצעות בדיקת href
+                const linkElements = postElement.querySelectorAll('a[href*="/in/"]');
+                for (const link of linkElements) {
+                    const text = link.textContent.trim();
+                    if (text && text.length > 2 && !text.includes('View') && !text.includes('profile')) {
+                        console.log('✅ Found author name via link:', text);
+                        return text;
+                    }
+                }
+                
+                console.log('⚠️ Could not extract author name, using Unknown Author');
+                return 'Unknown Author';
             } else if (this.platform === 'facebook') {
                 const authorElement = postElement.querySelector('[data-testid="post_author_name"], strong');
                 return authorElement ? authorElement.textContent.trim() : 'Unknown Author';
@@ -1675,8 +1754,8 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
                 return;
             }
             
-            if (!this.autoScrollEnabled) {
-                console.log('🛑 Cannot start auto-scroll - auto-scroll disabled');
+            if (!this.settings?.autoScroll) {
+                console.log('🛑 Cannot start auto-scroll - auto-scroll disabled in settings');
                 return;
             }
             
@@ -1721,11 +1800,11 @@ if (typeof window.socialBotContentScriptLoaded !== 'undefined') {
         }
 
         performAutoScroll() {
-            if (!this.isAutoScrolling || !this.isGloballyEnabled || !this.autoScrollEnabled) {
+            if (!this.isAutoScrolling || !this.isGloballyEnabled || !this.settings?.autoScroll) {
                 console.log('📜 Auto-scroll stopped - conditions not met:', {
                     isAutoScrolling: this.isAutoScrolling,
                     globallyEnabled: this.isGloballyEnabled,
-                    autoScrollEnabled: this.autoScrollEnabled
+                    autoScrollSetting: this.settings?.autoScroll
                 });
                 return;
             }

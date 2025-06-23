@@ -24,7 +24,7 @@
         "https://www.facebook.com/*",
         "https://facebook.com/*"
       ],
-      "js": ["content.js"],
+      "js": ["translations.js", "ai-agents-visualization.js", "content.js"],
       "css": ["content.css"],
       "run_at": "document_idle"
     }
@@ -48,7 +48,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["icons/*", "db.js", "dashboard.html", "dashboard.css", "dashboard.js", "translations.js"],
+      "resources": ["icons/*", "db.js", "dashboard.html", "dashboard.css", "dashboard.js", "translations.js", "ai-agents-visualization.js"],
       "matches": ["<all_urls>"]
     }
   ]
